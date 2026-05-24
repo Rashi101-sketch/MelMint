@@ -1,0 +1,618 @@
+@import "tailwindcss";
+
+/* ── MelMint Design Tokens ─────────────────────────────────── */
+@theme {
+  /* Mint-inspired primary palette */
+  --color-mint-50: #f0fdfa;
+  --color-mint-100: #ccfbf1;
+  --color-mint-200: #99f6e4;
+  --color-mint-300: #5eead4;
+  --color-mint-400: #2dd4bf;
+  --color-mint-500: #14b8a6;
+  --color-mint-600: #0d9488;
+  --color-mint-700: #0f766e;
+  --color-mint-800: #115e59;
+  --color-mint-900: #134e4a;
+
+  /* Deep navy surface palette */
+  --color-surface-50: #f8fafc;
+  --color-surface-100: #f1f5f9;
+  --color-surface-200: #e2e8f0;
+  --color-surface-300: #cbd5e1;
+  --color-surface-400: #94a3b8;
+  --color-surface-500: #64748b;
+  --color-surface-600: #475569;
+  --color-surface-700: #334155;
+  --color-surface-800: #1e293b;
+  --color-surface-900: #0f172a;
+  --color-surface-950: #020617;
+
+  /* Semantic colors */
+  --color-income: #10b981;
+  --color-income-light: #d1fae5;
+  --color-expense: #ef4444;
+  --color-expense-light: #fee2e2;
+  --color-savings: #14b8a6;
+  --color-savings-light: #ccfbf1;
+  --color-warning: #f59e0b;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Base Styles ───────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: linear-gradient(145deg, #020617 0%, #0f172a 30%, #042f2e 60%, #0f172a 100%);
+    color: #e2e8f0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: rgba(20, 184, 166, 0.3);
+    color: #ccfbf1;
+  }
+}
+
+/* ── Component Utilities ───────────────────────────────────── */
+@layer components {
+  .glass-card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-card:hover {
+    border-color: rgba(148, 163, 184, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  }
+
+  .glass-card-mint {
+    background: rgba(20, 184, 166, 0.06);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(20, 184, 166, 0.12);
+    border-radius: 1rem;
+  }
+
+  .glow-mint {
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.12), 0 0 60px rgba(20, 184, 166, 0.04);
+  }
+
+  .glow-income {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 60px rgba(16, 185, 129, 0.05);
+  }
+
+  .glow-expense {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.15), 0 0 60px rgba(239, 68, 68, 0.05);
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 0.625rem;
+    color: #e2e8f0;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .input-field:focus {
+    border-color: #14b8a6;
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+  }
+
+  .input-field::placeholder {
+    color: #64748b;
+  }
+
+  /* Inline editing cell */
+  .inline-input {
+    padding: 0.25rem 0.5rem;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid #14b8a6;
+    border-radius: 0.375rem;
+    color: #e2e8f0;
+    font-size: 0.8125rem;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
+    width: 100%;
+    min-width: 80px;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.5rem;
+    background: linear-gradient(135deg, #14b8a6, #0d9488);
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: 0.625rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #2dd4bf, #14b8a6);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(20, 184, 166, 0.35);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(148, 163, 184, 0.1);
+    color: #94a3b8;
+    font-weight: 500;
+    font-size: 0.8125rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    font-weight: 500;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-radius: 9999px;
+  }
+
+  .badge-income {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .badge-expense {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .badge-cycle {
+    background: rgba(20, 184, 166, 0.15);
+    color: #2dd4bf;
+    border: 1px solid rgba(20, 184, 166, 0.2);
+  }
+
+  /* Receipt Card */
+  .receipt-card {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8));
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px dashed rgba(20, 184, 166, 0.2);
+    border-radius: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .receipt-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #14b8a6, #2dd4bf, #14b8a6);
+  }
+
+  .receipt-divider {
+    border-top: 1px dashed rgba(148, 163, 184, 0.15);
+    margin: 0.75rem 0;
+  }
+
+  .receipt-total-divider {
+    border-top: 2px solid rgba(20, 184, 166, 0.3);
+    margin: 0.75rem 0;
+  }
+
+  /* Cycle Note Badges */
+  .cycle-note {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .cycle-note-saved {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #34d399;
+  }
+
+  .cycle-note-overspent {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #f87171;
+  }
+
+  .cycle-note-shortfall {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+  }
+
+  .cycle-note-info {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+  }
+}
+
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-mint {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(20, 184, 166, 0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+.animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+.animate-fade-in-up-d1 { animation: fadeInUp 0.5s ease-out 0.1s forwards; opacity: 0; }
+.animate-fade-in-up-d2 { animation: fadeInUp 0.5s ease-out 0.2s forwards; opacity: 0; }
+.animate-fade-in-up-d3 { animation: fadeInUp 0.5s ease-out 0.3s forwards; opacity: 0; }
+.animate-fade-in-up-d4 { animation: fadeInUp 0.5s ease-out 0.4s forwards; opacity: 0; }
+.animate-slide-in { animation: slideInRight 0.3s ease-out forwards; }
+.animate-pulse-mint { animation: pulse-mint 2s infinite; }
+.animate-float { animation: float 3s ease-in-out infinite; }
+
+/* ── Modal Overlay ─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background: linear-gradient(145deg, #1e293b, #0f172a);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  max-width: 32rem;
+  width: calc(100% - 2rem);
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+
+/* ── Editable cell hover indicator ─────────────────────────── */
+.editable-cell {
+  cursor: pointer;
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  margin: -0.125rem -0.375rem;
+  transition: background 0.15s ease;
+}
+
+.editable-cell:hover {
+  background: rgba(20, 184, 166, 0.08);
+}
+
+/* ── CommBank-style Tab Pills ─────────────────────────────── */
+.tab-pills {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.tab-pill {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #64748b;
+  background: transparent;
+  text-align: center;
+}
+
+.tab-pill:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.tab-pill-income {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
+}
+
+.tab-pill-spending {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.1);
+}
+
+.tab-pill-investing {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.1);
+}
+
+/* ── Period Toggle ────────────────────────────────────────── */
+.period-toggle {
+  display: flex;
+  gap: 0.125rem;
+  padding: 0.1875rem;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.period-btn {
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #64748b;
+  background: transparent;
+}
+
+.period-btn:hover {
+  color: #cbd5e1;
+}
+
+.period-btn-active {
+  color: #2dd4bf;
+  background: rgba(20, 184, 166, 0.15);
+}
+
+/* ── Cycle Selector ───────────────────────────────────────── */
+.cycle-select {
+  padding: 0.375rem 0.75rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0.5rem;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.cycle-select:focus {
+  border-color: #14b8a6;
+}
+
+/* ── Add Row ──────────────────────────────────────────────── */
+.add-row {
+  background: rgba(20, 184, 166, 0.04);
+  border-top: 1px dashed rgba(20, 184, 166, 0.2);
+}
+
+.add-row td {
+  padding: 0.5rem 1rem;
+}
+
+.add-row-input {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(20, 184, 166, 0.25);
+  border-radius: 0.375rem;
+  color: #e2e8f0;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.add-row-input:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.12);
+}
+
+.add-row-select {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(20, 184, 166, 0.25);
+  border-radius: 0.375rem;
+  color: #e2e8f0;
+  font-size: 0.8125rem;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ── Filter Bar ───────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.3);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  flex-wrap: wrap;
+}
+
+.filter-input {
+  padding: 0.375rem 0.75rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 0.5rem;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  outline: none;
+  min-width: 140px;
+  transition: border-color 0.2s ease;
+}
+
+.filter-input:focus {
+  border-color: #14b8a6;
+}
+
+.filter-select {
+  padding: 0.375rem 0.625rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 0.5rem;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ── Net Income Display ───────────────────────────────────── */
+.net-income-display {
+  text-align: center;
+  padding: 1.5rem 0 0.75rem;
+}
+
+.net-income-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.net-income-value {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.net-income-positive {
+  color: #34d399;
+}
+
+.net-income-negative {
+  color: #f87171;
+}
+
+.net-income-subtitle {
+  font-size: 0.6875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* ── Recharts Custom Styles ───────────────────────────────── */
+.recharts-cartesian-axis-tick-value {
+  fill: #64748b;
+  font-size: 0.6875rem;
+}
+
+.recharts-default-tooltip {
+  background: rgba(30, 41, 59, 0.95) !important;
+  border: 1px solid rgba(148, 163, 184, 0.15) !important;
+  border-radius: 0.625rem !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+

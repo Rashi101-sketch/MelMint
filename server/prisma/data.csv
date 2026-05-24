@@ -1,0 +1,51 @@
+sno,date,type,bank,item,amount
+1,2026-02-08,Cab Charge,Cash,Airport to home,115.00
+2,2026-02-08,Vodaphone recharge,Online papa,Recharge,55.00
+3,2026-02-14,Coles,Cash,Aunty,3.40
+4,2026-02-13,Optus Sim,Cash,New sim,13.00
+5,2026-02-23,Mykey Card,Cash,Travel Card,35.00
+6,2026-02-24,Laptop,Commbank,New Laptop,1640.00
+7,2026-02-26,Aldi,Paid by Aunty,First Home Ess.,108.77
+8,2026-02-26,Rent+Bond,Commbank,Room rent and Bond,850.00
+9,2026-02-27,Kmart,Commbank,Mug Bowl extension,19.75
+10,2026-02-27,Ind Grocery,Commbank,Spices rice etc,34.90
+11,2026-02-28,Aldi,Commbank,Toilet cleaner roti,5.99
+12,2026-03-04,Rusu Membership,Commbank,Student union,12.00
+13,2026-03-11,Rent,Commbank,Room rent,450.00
+14,2026-03-12,Mykey Card,ING bank,Travel Card recharge,30.00
+15,2026-03-13,Coles,ING bank,Milk Garbage bag,5.70
+16,2026-03-14,Aldi,ING bank,Apples,3.49
+17,2026-03-14,RSA Course,ING bank,Alcohol serve course,38.69
+18,2026-03-17,Rmit uni,ING bank,Fees,187.00
+19,2026-03-18,Optus Sim,Commbank,Recharge,350.00
+20,2026-03-20,Apna Desi,ING bank,Soys Sauce daal Dhania powder,16.42
+21,2026-03-20,Aldi,ING bank,Milk,5.17
+22,2026-03-24,Coles,ING bank,Ready to eat Brush paneer dahi,32.65
+23,2026-03-25,Rent,Commbank,Room rent,450.00
+24,2026-03-27,Kmart,Commbank,Hair Dryer,10.00
+25,2026-03-28,Aldi,ING bank,Milk Roti,7.18
+26,2026-03-29,Coles,ING bank,Suji,2.85
+27,2026-03-31,Coles,ING bank,Cucumber Tomato,11.56
+28,2026-04-05,Ashwini Uncle,Commbank,Laptop bag + cover,53.94
+29,2026-04-08,Rent,Commbank,Room rent,450.00
+30,2026-04-08,Salary,ING bank Savings,Casual Job Salary,146.59
+31,2026-04-08,Aldi,ING bank,Milk,3.19
+32,2026-04-13,Aldi,ING bank,Cheese slice strawberry toffee,4.24
+33,2026-04-14,Coles,ING bank,Eggs,5.70
+34,2026-04-19,Sarawan spices,Commbank,masale maggie poha biscuit,29.00
+35,2026-04-19,Ind Restaurant,Commbank,Lunch meal,11.00
+36,2026-04-20,Aldi,ING bank,Bread Peanuts Milk Ice cream,16.86
+37,2026-04-21,Big W,ING bank,3 big boxes 4 small boxex Hoddie Pajama,65.50
+38,2026-04-21,Wrong Payment,ING bank,Big W refund - wrong payment,65.50
+39,2026-04-22,Salary,ING bank Savings,Casual Job Salary,1019.65
+40,2026-04-22,Rent,Commbank,Room rent,450.00
+41,2026-04-22,Terry White Chemmart,ING bank,Nurofine,9.19
+42,2026-04-22,Coles,ING bank,Cucumber Onions,4.26
+43,2026-04-27,Dockland,Cash,Coconut oil chocolate,10.00
+44,2026-04-27,Dockland,ING bank,Ice cream mango,4.00
+45,2026-04-30,Mahima,ING bank,Drain cleaner,2.00
+46,2026-05-05,Woolsworth,Commbank,Sweet treat,17.10
+47,2026-05-06,Salary,ING bank Savings,Casual Job Salary,782.61
+48,2026-05-06,Rent,Commbank,Room rent,450.00
+49,2026-05-10,Coles,Commbank,Sneakers - 2,2.50
+50,2026-05-10,Party,Commbank,Uni party ticket,18.00
