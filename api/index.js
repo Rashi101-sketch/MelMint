@@ -48,9 +48,11 @@ app.use((err, req, res, next) => {
 });
 
 // ── Start Server ─────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n🌿 MelMint API running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}\n`);
-});
+if (require.main === module || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n🌿 MelMint API running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}\n`);
+  });
+}
 
 module.exports = app;
