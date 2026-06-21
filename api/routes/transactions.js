@@ -7,6 +7,7 @@ const {
   updateTransactionSchema,
   queryTransactionsSchema,
 } = require("../validators/schemas");
+const { syncCycle } = require("../lib/cycleSync");
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/transactions — List transactions (paginated + filtered)
@@ -65,20 +66,11 @@ router.get("/", validate(queryTransactionsSchema, "query"), async (req, res, nex
 // ─────────────────────────────────────────────────────────────
 // Helper: Find the cycle a transaction date falls into
 // Checks all cycles' date ranges to find the matching one
+// Prioritizes ACTIVE cycles to avoid boundary date conflicts
 // ─────────────────────────────────────────────────────────────
 async function findCycleForDate(txDate) {
-  // First try: find a CLOSED cycle whose date range covers this date
-  const closedMatch = await prisma.cycle.findFirst({
-    where: {
-      startDate: { lte: txDate },
-      endDate: { gte: txDate },
-      status: "CLOSED",
-    },
-    orderBy: { startDate: "desc" },
-  });
-  if (closedMatch) return closedMatch;
-
-  // Second try: find the ACTIVE cycle that started before or on this date
+  // First try: find the ACTIVE cycle that started before or on this date
+  // Check ACTIVE first to prioritize current cycle when date matches cycle boundary
   const activeMatch = await prisma.cycle.findFirst({
     where: {
       startDate: { lte: txDate },
@@ -87,6 +79,18 @@ async function findCycleForDate(txDate) {
     orderBy: { startDate: "desc" },
   });
   if (activeMatch) return activeMatch;
+
+  // Second try: find a CLOSED cycle whose date range covers this date
+  // Use endDate > txDate instead of >= to avoid double-counting boundary dates
+  const closedMatch = await prisma.cycle.findFirst({
+    where: {
+      startDate: { lte: txDate },
+      endDate: { gt: txDate }, // Use > instead of >= to exclude the end boundary
+      status: "CLOSED",
+    },
+    orderBy: { startDate: "desc" },
+  });
+  if (closedMatch) return closedMatch;
 
   // Third try: if the date is before all cycles, find the earliest cycle
   // (for very old backdated transactions)
@@ -151,8 +155,38 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
           _sum: { amount: true },
         });
 
+        // Sum extra income in the previous cycle (exclude Salary)
+        const extraIncomeAgg = await prisma.transaction.aggregate({
+          where: {
+            cycleId: previousCycle.id,
+            transactionType: "INCOME",
+            category: { notIn: ["Salary", "salary"] },
+          },
+          _sum: { amount: true },
+        });
+
         const totalRegularExpenses = Number(expenseAgg._sum.amount || 0);
-        const remaining = Number(previousCycle.expenseLimit) - totalRegularExpenses;
+        const extraIncome = Number(extraIncomeAgg._sum.amount || 0);
+        
+        let baseLimit = Number(previousCycle.expenseLimit);
+        let adjustedExpenseLimit = baseLimit + extraIncome;
+
+        // Cycle 1 Exception
+        const isCycle1ExceptionPrev = previousCycle.startDate >= new Date("2026-04-08") && previousCycle.startDate <= new Date("2026-04-21T23:59:59");
+        if (isCycle1ExceptionPrev) {
+          const salaryIncomeAgg = await prisma.transaction.aggregate({
+            where: {
+              cycleId: previousCycle.id,
+              transactionType: "INCOME",
+              category: { in: ["Salary", "salary"] },
+            },
+            _sum: { amount: true },
+          });
+          const salaryIncome = Number(salaryIncomeAgg._sum.amount || 0);
+          adjustedExpenseLimit = salaryIncome + extraIncome;
+        }
+
+        const remaining = adjustedExpenseLimit - totalRegularExpenses;
         rolloverAmount = Math.max(0, remaining);
 
         // Get goals sorted by priority for smart adjustments
@@ -318,6 +352,9 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
               source: "salary_allocation",
             },
           });
+
+          // Record the allocation in the cycle notes so it is visible in the UI
+          newCycleNotes.push(`Allocated $${alloc.suggestedAmount.toFixed(2)} to ${alloc.goalName}`);
         }
       }
 
@@ -392,6 +429,11 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
 
     // Include which cycle it was assigned to (helpful for UI feedback)
     response.assignedCycleId = targetCycleId;
+
+    // Trigger synchronization of the target cycle to update allocations/rollovers
+    if (targetCycleId) {
+      await syncCycle(targetCycleId);
+    }
 
     res.status(201).json(response);
   } catch (error) {
@@ -488,6 +530,14 @@ router.put("/:id", validate(updateTransactionSchema, "body"), async (req, res, n
       include: { wallet: { select: { name: true } } },
     });
 
+    // Synchronize cycles affected by the edit
+    if (existing.cycleId) {
+      await syncCycle(existing.cycleId);
+    }
+    if (updated.cycleId && updated.cycleId !== existing.cycleId) {
+      await syncCycle(updated.cycleId);
+    }
+
     res.json({
       success: true,
       data: { ...updated, amount: Number(updated.amount), walletName: updated.wallet?.name },
@@ -523,6 +573,11 @@ router.delete("/:id", async (req, res, next) => {
     });
 
     await prisma.transaction.delete({ where: { id } });
+
+    // Synchronize the cycle affected by the deletion
+    if (existing.cycleId) {
+      await syncCycle(existing.cycleId);
+    }
 
     res.json({ success: true, message: `Transaction ${id} deleted` });
   } catch (error) {

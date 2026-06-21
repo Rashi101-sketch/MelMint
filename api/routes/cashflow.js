@@ -76,7 +76,7 @@ router.get("/", validate(cashflowQuerySchema, "query"), async (req, res, next) =
           const startDate = new Date(cycle.startDate);
           const endDate = cycle.endDate ? new Date(cycle.endDate) : new Date(startDate);
           if (!cycle.endDate) {
-            endDate.setDate(endDate.getDate() + 13);
+            endDate.setDate(endDate.getDate() + 14);
           }
 
           return {

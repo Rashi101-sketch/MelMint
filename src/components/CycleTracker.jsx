@@ -44,7 +44,7 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
   const today = new Date();
   const daysIn = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 13);
+  endDate.setDate(endDate.getDate() + 14);
   const daysLeft = Math.max(0, Math.floor((endDate - today) / (1000 * 60 * 60 * 24)));
 
   const formatDate = (d) =>

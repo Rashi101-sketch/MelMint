@@ -11,8 +11,16 @@ const CATEGORIES = [
 
 const PAYMENT_METHODS = ["Commbank", "ING", "Cash", "Custom"];
 
+// Format local datetime for datetime-local input (YYYY-MM-DDTHH:MM)
+const getLocalDateTime = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
 const initialForm = {
-  date: new Date().toISOString().split("T")[0],
+  date: getLocalDateTime(),
   transactionType: "EXPENSE",
   category: "",
   paymentMethod: "",
@@ -99,8 +107,8 @@ export default function AddTransactionForm({ wallets, onSuccess, onSalaryAdded }
         {/* Date + Amount */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="date-input" className="block text-xs font-medium text-surface-400 mb-1.5">Date</label>
-            <input type="date" id="date-input" name="date" value={form.date} onChange={handleChange} className="input-field" required />
+            <label htmlFor="date-input" className="block text-xs font-medium text-surface-400 mb-1.5">Date & Time</label>
+            <input type="datetime-local" id="date-input" name="date" value={form.date} onChange={handleChange} className="input-field" required />
           </div>
           <div>
             <label htmlFor="amount-input" className="block text-xs font-medium text-surface-400 mb-1.5">Amount ($)</label>

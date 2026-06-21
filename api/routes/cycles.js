@@ -218,7 +218,7 @@ router.get("/current", async (req, res, next) => {
     const today = new Date();
     const daysIntoCycle = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
     const estimatedEndDate = new Date(startDate);
-    estimatedEndDate.setDate(estimatedEndDate.getDate() + 13);
+    estimatedEndDate.setDate(estimatedEndDate.getDate() + 14);
 
     // Dynamic rent for this cycle
     const rentAgg = await prisma.transaction.aggregate({

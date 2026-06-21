@@ -32,8 +32,19 @@ export default function CycleDashboard() {
 
   const selectedCycle = cycles.find((c) => c.id === selectedCycleId);
 
-  const formatDate = (d) =>
-    new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  const formatDate = (d) => {
+    if (!d) return "Ongoing";
+    const parsed = new Date(d);
+    if (isNaN(parsed.getTime())) return "Ongoing";
+    return parsed.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const getCycleEndLabel = (cycle) => {
+    if (cycle.endDate) return formatDate(cycle.endDate);
+    const est = new Date(cycle.startDate);
+    est.setDate(est.getDate() + 14);
+    return formatDate(est);
+  };
 
   const formatCurrency = (n) =>
     `$${Math.abs(Number(n)).toLocaleString("en-AU", { minimumFractionDigits: 2 })}`;
@@ -100,7 +111,7 @@ export default function CycleDashboard() {
           >
             {cycles.map((c) => (
               <option key={c.id} value={c.id}>
-                {formatDate(c.startDate)} – {formatDate(c.endDate)}
+                {formatDate(c.startDate)} – {getCycleEndLabel(c)}
               </option>
             ))}
           </select>
