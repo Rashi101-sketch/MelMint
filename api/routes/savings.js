@@ -77,6 +77,22 @@ router.patch("/:id", validate(addToSavingsGoalSchema, "body"), async (req, res, 
       data: { savedAmount: newSaved },
     });
 
+    // Create contribution record for tracking
+    const activeCycle = await prisma.cycle.findFirst({
+      where: { status: "ACTIVE" },
+      orderBy: { startDate: "desc" },
+    });
+    if (activeCycle) {
+      await prisma.savingsContribution.create({
+        data: {
+          cycleId: activeCycle.id,
+          goalId: id,
+          amount,
+          source: "manual",
+        },
+      });
+    }
+
     res.json({
       success: true,
       data: {
@@ -147,6 +163,12 @@ router.post("/allocate", validate(allocateSavingsSchema, "body"), async (req, re
       });
     }
 
+    // Find active cycle for contribution tracking
+    const activeCycle = await prisma.cycle.findFirst({
+      where: { status: "ACTIVE" },
+      orderBy: { startDate: "desc" },
+    });
+
     // Update each goal
     const results = [];
     for (const allocation of allocations) {
@@ -161,6 +183,18 @@ router.post("/allocate", validate(allocateSavingsSchema, "body"), async (req, re
           savedAmount: Number(goal.savedAmount) + allocation.amount,
         },
       });
+
+      // Create contribution record for tracking
+      if (activeCycle) {
+        await prisma.savingsContribution.create({
+          data: {
+            cycleId: activeCycle.id,
+            goalId: allocation.goalId,
+            amount: allocation.amount,
+            source: "salary_allocation",
+          },
+        });
+      }
 
       results.push({
         ...updated,

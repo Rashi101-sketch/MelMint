@@ -43,12 +43,12 @@ async function syncCycle(cycleId) {
     const isCycle1Exception = cycle.startDate >= new Date("2026-04-08") && cycle.startDate <= new Date("2026-04-21T23:59:59");
 
     // ─── PART A: START-OF-CYCLE ROUTING (Salary allocations and rent shortfalls) ───
-    // A1. Reverse existing salary allocations for this cycle from goals' savedAmount
-    const existingAllocations = await prisma.savingsContribution.findMany({
-      where: { cycleId, source: "salary_allocation" }
+    // A1. Reverse existing salary allocations AND rent shortfall deductions for this cycle
+    const existingStartAllocations = await prisma.savingsContribution.findMany({
+      where: { cycleId, source: { in: ["salary_allocation", "rent_shortfall"] } }
     });
 
-    for (const c of existingAllocations) {
+    for (const c of existingStartAllocations) {
       const goal = goals.find(g => g.id === c.goalId);
       if (goal) {
         goal.savedAmount = Number(goal.savedAmount) - Number(c.amount);
@@ -59,9 +59,9 @@ async function syncCycle(cycleId) {
       }
     }
 
-    // Delete old salary allocations
+    // Delete old salary allocations and rent shortfall records
     await prisma.savingsContribution.deleteMany({
-      where: { cycleId, source: "salary_allocation" }
+      where: { cycleId, source: { in: ["salary_allocation", "rent_shortfall"] } }
     });
 
     // A2. Calculate new salary allocations and rent shortfall
@@ -74,17 +74,25 @@ async function syncCycle(cycleId) {
       const afterLimit = salaryAmount - expenseLimit;
       if (afterLimit < dynamicRent && dynamicRent > 0) {
         rentShortfall = dynamicRent - Math.max(0, afterLimit);
-        // Deduct rent shortfall from least important goal
+        // Deduct rent shortfall from least important goal WITH contribution record
         if (leastImportantGoal) {
-          // Note: Rent shortfall is deducted directly without contribution record (reverting this requires manual check if needed, 
-          // but since it's deducted directly, we can't easily track old deductions. However, we can re-apply the shortfall calculation.)
-          // To prevent double-deduction or loss, we re-apply the logic starting from base goals.
-          // In MelMint, goal saved amounts are stored aggregates.
-          leastImportantGoal.savedAmount = Math.max(0, Number(leastImportantGoal.savedAmount) - rentShortfall);
+          const deductAmount = Math.min(rentShortfall, Math.max(0, Number(leastImportantGoal.savedAmount)));
+          leastImportantGoal.savedAmount = Math.max(0, Number(leastImportantGoal.savedAmount) - deductAmount);
           await prisma.savingsGoal.update({
             where: { id: leastImportantGoal.id },
             data: { savedAmount: leastImportantGoal.savedAmount }
           });
+          // Create tracked contribution record so it can be reversed on re-sync
+          if (deductAmount > 0) {
+            await prisma.savingsContribution.create({
+              data: {
+                cycleId,
+                goalId: leastImportantGoal.id,
+                amount: -deductAmount, // negative = deduction
+                source: "rent_shortfall"
+              }
+            });
+          }
           newCycleNotes.push(`Rent shortfall $${rentShortfall.toFixed(2)}, deducted from ${leastImportantGoal.name}`);
         }
       }

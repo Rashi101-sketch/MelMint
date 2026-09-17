@@ -285,36 +285,10 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
       const dynamicRent = Number(rentAgg._sum.amount || 0);
 
       // ── 5. Priority-based salary routing ──────────────────────
-      // Step 1: Reserve expense limit
-      const afterLimit = amount - expenseLimit;
-      // Step 2: Pay rent from remaining
-      let rentShortfall = 0;
+      // Rent shortfall detection and deductions are handled by syncCycle()
+      // which runs after transaction creation and properly tracks
+      // contribution records for reversibility.
       const newCycleNotes = [];
-
-      if (afterLimit < dynamicRent && dynamicRent > 0) {
-        rentShortfall = dynamicRent - Math.max(0, afterLimit);
-        // Deduct shortfall from least important goal
-        const leastGoal = await prisma.savingsGoal.findFirst({
-          orderBy: { priority: "desc" },
-        });
-        if (leastGoal) {
-          const goalAvailable = Number(leastGoal.savedAmount);
-          const deduct = Math.min(rentShortfall, goalAvailable);
-          await prisma.savingsGoal.update({
-            where: { id: leastGoal.id },
-            data: { savedAmount: Math.max(0, goalAvailable - deduct) },
-          });
-          newCycleNotes.push(`Rent shortfall $${rentShortfall.toFixed(2)}, deducted from ${leastGoal.name}`);
-        }
-      }
-
-      // Update cycle notes if shortfall occurred
-      if (newCycleNotes.length > 0) {
-        await prisma.cycle.update({
-          where: { id: newCycle.id },
-          data: { cycleNotes: newCycleNotes.join(" | ") },
-        });
-      }
 
       // ── 6. Calculate available savings ────────────────────────
       availableSavings = Math.max(0, amount - dynamicRent - expenseLimit);
@@ -331,40 +305,21 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
         targetAmount: Number(g.targetAmount),
       }));
 
-      // ── 7b. AUTO-APPLY savings allocations to goals ────────────
-      // Persist allocations immediately so goals stay in sync
-      if (!isCycle1Exception && availableSavings > 0) {
-        for (const alloc of suggestedAllocations) {
-          if (alloc.suggestedAmount <= 0) continue;
-
-          // Update goal balance
-          await prisma.savingsGoal.update({
-            where: { id: alloc.goalId },
-            data: { savedAmount: { increment: alloc.suggestedAmount } },
-          });
-
-          // Record contribution history
-          await prisma.savingsContribution.create({
-            data: {
-              cycleId: newCycle.id,
-              goalId: alloc.goalId,
-              amount: alloc.suggestedAmount,
-              source: "salary_allocation",
-            },
-          });
-
-          // Record the allocation in the cycle notes so it is visible in the UI
-          newCycleNotes.push(`Allocated $${alloc.suggestedAmount.toFixed(2)} to ${alloc.goalName}`);
-        }
-      }
+      // NOTE: Savings allocations are NOT applied here.
+      // syncCycle() is called after transaction creation and handles
+      // all allocation logic (including contribution records) exclusively.
+      // This prevents double-application and keeps logic in one place.
 
       // ── 8. Build salary breakdown for Receipt UI ──────────────
+      const afterLimit = amount - expenseLimit;
+      const rentShortfallCalc = (afterLimit < dynamicRent && dynamicRent > 0)
+        ? dynamicRent - Math.max(0, afterLimit) : 0;
       salaryBreakdown = {
         totalSalary: amount,
         expenseLimit,
         dynamicRent,
-        rentShortfall,
-        rentShortfallSource: rentShortfall > 0 ? (await prisma.savingsGoal.findFirst({ orderBy: { priority: "desc" } }))?.name : null,
+        rentShortfall: rentShortfallCalc,
+        rentShortfallSource: rentShortfallCalc > 0 ? (await prisma.savingsGoal.findFirst({ orderBy: { priority: "desc" } }))?.name : null,
         availableForGoals: availableSavings,
         goalDistribution: suggestedAllocations,
         closingNotes: closingNotes.length > 0 ? closingNotes : null,

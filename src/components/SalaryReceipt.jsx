@@ -110,7 +110,8 @@ export default function SalaryReceipt() {
   }
 
   const salary = Number(selectedCycle?.salaryAmount || 0);
-  const expenseLimit = Number(selectedCycle?.adjustedExpenseLimit || selectedCycle?.expenseLimit || 0);
+  // Use base expenseLimit (not adjustedExpenseLimit) to match backend allocation formula
+  const expenseLimit = Number(selectedCycle?.expenseLimit || 0);
   const availableForGoals = salary - expenseLimit - rentAmount;
   const totalPct = goals.reduce((sum, g) => sum + g.percentage, 0);
   const cycleNotes = selectedCycle?.cycleNotes || "";
