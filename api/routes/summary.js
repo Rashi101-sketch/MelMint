@@ -3,19 +3,53 @@ const router = express.Router();
 const prisma = require("../lib/prisma");
 const validate = require("../middleware/validate");
 const { summaryQuerySchema } = require("../validators/schemas");
+const { EARNING_START_DATE } = require("../lib/ensureCycle");
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/summary — Financial summary
 //
+// The Starting Balance ($2,634.79) represents pre-existing money
+// from parents, computed as all Setup Fund transactions strictly before
+// 2026-04-22. It is frozen and never changes.
+//
+// totalIncome, totalExpenses, netBalance only count transactions
+// ON OR AFTER 2026-04-22 (the earning period).
+//
+// totalBalance = startingBalance + netBalance (earned)
+//
 // Query params:
 //   ?cycleId=1           → Summary for a specific cycle
 //   ?startDate=&endDate= → Custom date range
-//   (no params)          → All-time summary
+//   (no params)          → Earned-period summary (post-22-April)
 // ─────────────────────────────────────────────────────────────
 router.get("/", validate(summaryQuerySchema, "query"), async (req, res, next) => {
   try {
     const { cycleId, startDate, endDate } = req.query;
 
+    // ── Starting Balance: frozen pre-earning period ──────────
+    // Frozen Starting Balance: sum of all Setup Fund transactions strictly before 2026-04-22 ($2,634.79)
+    const preEarningCutoff = new Date("2026-04-22T00:00:00.000Z");
+    const [preIncome, preExpense] = await Promise.all([
+      prisma.transaction.aggregate({
+        where: {
+          wallet: { name: "Setup Fund" },
+          transactionType: "INCOME",
+          date: { lt: preEarningCutoff },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          wallet: { name: "Setup Fund" },
+          transactionType: "EXPENSE",
+          date: { lt: preEarningCutoff },
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+    const startingBalance = Number(preIncome._sum.amount || 0) - Number(preExpense._sum.amount || 0);
+
+    // ── Earned-period summary ────────────────────────────────
     const where = {};
 
     if (cycleId) {
@@ -28,6 +62,9 @@ router.get("/", validate(summaryQuerySchema, "query"), async (req, res, next) =>
         end.setHours(23, 59, 59, 999);
         where.date.lte = end;
       }
+    } else {
+      // Default: only count post-22-April transactions
+      where.date = { gte: EARNING_START_DATE };
     }
 
     const [incomeAgg, expenseAgg, expensesByCategory, savingsGoals] = await Promise.all([
@@ -53,14 +90,18 @@ router.get("/", validate(summaryQuerySchema, "query"), async (req, res, next) =>
 
     const totalIncome = Number(incomeAgg._sum.amount || 0);
     const totalExpenses = Number(expenseAgg._sum.amount || 0);
+    const netBalance = totalIncome - totalExpenses;
     const totalSaved = savingsGoals.reduce((sum, g) => sum + Number(g.savedAmount), 0);
+    const totalBalance = startingBalance + netBalance;
 
     res.json({
       success: true,
       data: {
+        startingBalance,
         totalIncome,
         totalExpenses,
-        netBalance: totalIncome - totalExpenses,
+        netBalance,
+        totalBalance,
         totalSaved,
         incomeCount: incomeAgg._count,
         expenseCount: expenseAgg._count,

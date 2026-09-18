@@ -25,7 +25,7 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
         <span className="text-3xl mb-3 block">📅</span>
         <p className="text-surface-300 font-semibold text-sm">No Active Cycle</p>
         <p className="text-surface-500 text-xs mt-1">
-          Add a <span className="text-mint-400 font-semibold">Salary</span> transaction to start a new fortnightly cycle
+          A new monthly cycle will start automatically at the beginning of each month.
         </p>
       </div>
     );
@@ -41,11 +41,11 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
   const overspendDeduction = cycle.overspendDeduction || null;
 
   const startDate = new Date(cycle.startDate);
+  const endDate = cycle.estimatedEndDate ? new Date(cycle.estimatedEndDate) : (cycle.endDate ? new Date(cycle.endDate) : new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0));
   const today = new Date();
-  const daysIn = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 14);
-  const daysLeft = Math.max(0, Math.floor((endDate - today) / (1000 * 60 * 60 * 24)));
+  const daysIn = cycle.daysIntoCycle ?? Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+  const totalDays = cycle.totalDaysInCycle ?? Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  const daysLeft = cycle.daysLeft ?? Math.max(0, totalDays - daysIn);
 
   const formatDate = (d) =>
     new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short" });

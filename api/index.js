@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const { ensureCurrentCycle } = require("./lib/ensureCycle");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,14 +27,17 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", app: "MelMint", timestamp: new Date().toISOString() });
 });
 
+// ── Lazy Monthly Cycle Management ────────────────────────────
+// Ensures a valid monthly cycle exists before any route handler runs.
+// Closes stale cycles and creates new ones when the calendar month changes.
+app.use("/api", ensureCurrentCycle);
+
 // ── Routes ───────────────────────────────────────────────────
 app.use("/api/transactions", require("./routes/transactions"));
-app.use("/api/wallets", require("./routes/wallets"));
 app.use("/api/cycles", require("./routes/cycles"));
 app.use("/api/savings", require("./routes/savings"));
 app.use("/api/settings", require("./routes/settings"));
 app.use("/api/summary", require("./routes/summary"));
-app.use("/api/cashflow", require("./routes/cashflow"));
 
 // ── Global Error Handler ─────────────────────────────────────
 app.use((err, req, res, next) => {

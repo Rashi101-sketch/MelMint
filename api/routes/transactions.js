@@ -8,6 +8,7 @@ const {
   queryTransactionsSchema,
 } = require("../validators/schemas");
 const { syncCycle } = require("../lib/cycleSync");
+const { getMonthBounds } = require("../lib/ensureCycle");
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/transactions — List transactions (paginated + filtered)
@@ -17,7 +18,7 @@ router.get("/", validate(queryTransactionsSchema, "query"), async (req, res, nex
     const {
       page, limit, sortBy, sortOrder,
       transactionType, category, paymentMethod,
-      walletId, cycleId, startDate, endDate,
+      cycleId, startDate, endDate,
     } = req.query;
 
     const where = {};
@@ -25,7 +26,6 @@ router.get("/", validate(queryTransactionsSchema, "query"), async (req, res, nex
     if (transactionType) where.transactionType = transactionType;
     if (category) where.category = { contains: category };
     if (paymentMethod) where.paymentMethod = { contains: paymentMethod };
-    if (walletId) where.walletId = walletId;
     if (cycleId) where.cycleId = cycleId;
 
     if (startDate || endDate) {
@@ -42,7 +42,6 @@ router.get("/", validate(queryTransactionsSchema, "query"), async (req, res, nex
       prisma.transaction.count({ where }),
       prisma.transaction.findMany({
         where,
-        include: { wallet: { select: { name: true } } },
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
@@ -54,7 +53,6 @@ router.get("/", validate(queryTransactionsSchema, "query"), async (req, res, nex
       data: transactions.map((t) => ({
         ...t,
         amount: Number(t.amount),
-        walletName: t.wallet?.name,
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
@@ -64,64 +62,38 @@ router.get("/", validate(queryTransactionsSchema, "query"), async (req, res, nex
 });
 
 // ─────────────────────────────────────────────────────────────
-// Helper: Find the cycle a transaction date falls into
-// Checks all cycles' date ranges to find the matching one
-// Prioritizes ACTIVE cycles to avoid boundary date conflicts
+// Helper: Find the monthly cycle a transaction date falls into
 // ─────────────────────────────────────────────────────────────
 async function findCycleForDate(txDate) {
-  // First try: find the ACTIVE cycle that started before or on this date
-  // Check ACTIVE first to prioritize current cycle when date matches cycle boundary
-  const activeMatch = await prisma.cycle.findFirst({
+  // Find a cycle whose date range covers this transaction's date
+  const match = await prisma.cycle.findFirst({
     where: {
       startDate: { lte: txDate },
-      status: "ACTIVE",
+      endDate: { gte: txDate },
+      status: { in: ["ACTIVE", "CLOSED"] },
     },
     orderBy: { startDate: "desc" },
   });
-  if (activeMatch) return activeMatch;
-
-  // Second try: find a CLOSED cycle whose date range covers this date
-  // Use endDate > txDate instead of >= to avoid double-counting boundary dates
-  const closedMatch = await prisma.cycle.findFirst({
-    where: {
-      startDate: { lte: txDate },
-      endDate: { gt: txDate }, // Use > instead of >= to exclude the end boundary
-      status: "CLOSED",
-    },
-    orderBy: { startDate: "desc" },
-  });
-  if (closedMatch) return closedMatch;
-
-  // Third try: if the date is before all cycles, find the earliest cycle
-  // (for very old backdated transactions)
-  const earliestCycle = await prisma.cycle.findFirst({
-    orderBy: { startDate: "asc" },
-  });
-
-  // Only assign if the date is reasonably close (within 14 days before cycle start)
-  if (earliestCycle) {
-    const cycleStart = new Date(earliestCycle.startDate);
-    const diffDays = (cycleStart - txDate) / (1000 * 60 * 60 * 24);
-    if (diffDays <= 14 && diffDays >= 0) return earliestCycle;
-  }
-
-  return null; // No matching cycle found
+  return match;
 }
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/transactions — Create a transaction
-// If category === "Salary", triggers the cycle/rollover logic
-// Assigns transaction to the cycle matching its DATE, not current time
+// Assigns transaction to the monthly cycle matching its date.
+// Salary transactions are treated as regular income (no cycle trigger).
 // ─────────────────────────────────────────────────────────────
 router.post("/", validate(createTransactionSchema, "body"), async (req, res, next) => {
   try {
     let { date, transactionType, category, paymentMethod, description, amount, walletId } = req.body;
 
-    const isSalary = category.toLowerCase() === "salary" && transactionType === "INCOME";
     const txDate = new Date(date);
-    const isCycle1Exception = txDate >= new Date("2026-04-08") && txDate <= new Date("2026-04-21T23:59:59");
 
-    // Rent Sourcing Exception
+    // ── Historical: Cycle 1 rent-to-Setup-Fund exception ──────
+    // Kept as a record of the transition from parent-funded to self-funded.
+    // This date range (2026-04-08 to 2026-04-21) marks when rent was still
+    // paid from the Setup Fund. Won't apply to new transactions since wallet
+    // assignment is no longer meaningful.
+    const isCycle1Exception = txDate >= new Date("2026-04-08") && txDate <= new Date("2026-04-21T23:59:59");
     if (isCycle1Exception && category.toLowerCase() === "rent") {
       const setupFund = await prisma.wallet.findFirst({ where: { name: { contains: "Setup" } } });
       if (setupFund) {
@@ -129,215 +101,27 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
       }
     }
 
-    let newCycle = null;
-    let rolloverAmount = 0;
-    let availableSavings = 0;
-    let suggestedAllocations = [];
-    let salaryBreakdown = null;
-
-    if (isSalary) {
-      // ── 1. Close previous active cycle with smart adjustments ──
-      const previousCycle = await prisma.cycle.findFirst({
-        where: { status: "ACTIVE" },
-        orderBy: { startDate: "desc" },
-      });
-
-      const closingNotes = [];
-
-      if (previousCycle) {
-        // Sum regular expenses in the previous cycle (exclude Rent)
-        const expenseAgg = await prisma.transaction.aggregate({
-          where: {
-            cycleId: previousCycle.id,
-            transactionType: "EXPENSE",
-            category: { notIn: ["Rent", "rent"] },
-          },
-          _sum: { amount: true },
-        });
-
-        // Sum extra income in the previous cycle (exclude Salary)
-        const extraIncomeAgg = await prisma.transaction.aggregate({
-          where: {
-            cycleId: previousCycle.id,
-            transactionType: "INCOME",
-            category: { notIn: ["Salary", "salary"] },
-          },
-          _sum: { amount: true },
-        });
-
-        const totalRegularExpenses = Number(expenseAgg._sum.amount || 0);
-        const extraIncome = Number(extraIncomeAgg._sum.amount || 0);
-        
-        let baseLimit = Number(previousCycle.expenseLimit);
-        let adjustedExpenseLimit = baseLimit + extraIncome;
-
-        // Cycle 1 Exception
-        const isCycle1ExceptionPrev = previousCycle.startDate >= new Date("2026-04-08") && previousCycle.startDate <= new Date("2026-04-21T23:59:59");
-        if (isCycle1ExceptionPrev) {
-          const salaryIncomeAgg = await prisma.transaction.aggregate({
-            where: {
-              cycleId: previousCycle.id,
-              transactionType: "INCOME",
-              category: { in: ["Salary", "salary"] },
-            },
-            _sum: { amount: true },
-          });
-          const salaryIncome = Number(salaryIncomeAgg._sum.amount || 0);
-          adjustedExpenseLimit = salaryIncome + extraIncome;
-        }
-
-        const remaining = adjustedExpenseLimit - totalRegularExpenses;
-        rolloverAmount = Math.max(0, remaining);
-
-        // Get goals sorted by priority for smart adjustments
-        const mostImportantGoal = await prisma.savingsGoal.findFirst({
-          orderBy: { priority: "asc" }, // priority 1 = most important
-        });
-        const leastImportantGoal = await prisma.savingsGoal.findFirst({
-          orderBy: { priority: "desc" }, // priority 3 = least important
-        });
-
-        if (remaining > 0 && mostImportantGoal) {
-          // SAVED: Transfer surplus to Most Important Goal
-          await prisma.savingsGoal.update({
-            where: { id: mostImportantGoal.id },
-            data: {
-              savedAmount: Number(mostImportantGoal.savedAmount) + remaining,
-            },
-          });
-          // Record contribution history for rollover
-          await prisma.savingsContribution.create({
-            data: {
-              cycleId: previousCycle.id,
-              goalId: mostImportantGoal.id,
-              amount: remaining,
-              source: "rollover",
-            },
-          });
-          closingNotes.push(`Saved $${remaining.toFixed(2)}, added to ${mostImportantGoal.name}`);
-        } else if (remaining < 0 && leastImportantGoal) {
-          // OVERSPENT: Deduct from Least Important Goal
-          const overspend = Math.abs(remaining);
-          const available = Number(leastImportantGoal.savedAmount);
-          const deductAmount = Math.min(overspend, available);
-          await prisma.savingsGoal.update({
-            where: { id: leastImportantGoal.id },
-            data: {
-              savedAmount: Math.max(0, available - deductAmount),
-            },
-          });
-          // Record contribution history for overspend deduction
-          await prisma.savingsContribution.create({
-            data: {
-              cycleId: previousCycle.id,
-              goalId: leastImportantGoal.id,
-              amount: -deductAmount, // negative = deduction
-              source: "overspend_deduction",
-            },
-          });
-          closingNotes.push(`Overspent by $${overspend.toFixed(2)}, deducted from ${leastImportantGoal.name}`);
-          if (deductAmount < overspend) {
-            closingNotes.push(`$${(overspend - deductAmount).toFixed(2)} unrecoverable`);
-          }
-        } else {
-          closingNotes.push("Broke even — no adjustment needed");
-        }
-
-        // Close the previous cycle
-        await prisma.cycle.update({
-          where: { id: previousCycle.id },
-          data: {
-            endDate: txDate,
-            status: "CLOSED",
-            rolloverAmount,
-            cycleNotes: closingNotes.join(" | "),
-          },
-        });
-      }
-
-      // ── 2. Get current expense limit from settings ──────────
-      const limitSetting = await prisma.setting.findUnique({ where: { key: "expense_limit" } });
-      const expenseLimit = parseFloat(limitSetting?.value || "150");
-
-      // ── 3. Create new cycle ──────────────────────────────────
-      newCycle = await prisma.cycle.create({
-        data: {
-          startDate: txDate,
-          salaryAmount: amount,
-          expenseLimit,
-          rolloverAmount,
-          status: "ACTIVE",
-        },
-      });
-
-      // ── 4. Dynamic rent: fetch from transactions in this cycle ──
-      // (Rent may be added on the same day, so we check after cycle creation)
-      // For now, calculate based on the current state — rent transactions
-      // will be assigned to this cycle when they're created
-      const rentAgg = await prisma.transaction.aggregate({
-        where: {
-          cycleId: newCycle.id,
-          transactionType: "EXPENSE",
-          category: { in: ["Rent", "rent"] },
-        },
-        _sum: { amount: true },
-      });
-      const dynamicRent = Number(rentAgg._sum.amount || 0);
-
-      // ── 5. Priority-based salary routing ──────────────────────
-      // Rent shortfall detection and deductions are handled by syncCycle()
-      // which runs after transaction creation and properly tracks
-      // contribution records for reversibility.
-      const newCycleNotes = [];
-
-      // ── 6. Calculate available savings ────────────────────────
-      availableSavings = Math.max(0, amount - dynamicRent - expenseLimit);
-
-      // ── 7. Get suggested allocations ──────────────────────────
-      const goals = await prisma.savingsGoal.findMany({ orderBy: { priority: "asc" } });
-      suggestedAllocations = goals.map((g) => ({
-        goalId: g.id,
-        goalName: g.name,
-        percentage: g.percentage,
-        priority: g.priority,
-        suggestedAmount: isCycle1Exception ? 0 : parseFloat(((g.percentage / 100) * availableSavings).toFixed(2)),
-        currentSaved: Number(g.savedAmount),
-        targetAmount: Number(g.targetAmount),
-      }));
-
-      // NOTE: Savings allocations are NOT applied here.
-      // syncCycle() is called after transaction creation and handles
-      // all allocation logic (including contribution records) exclusively.
-      // This prevents double-application and keeps logic in one place.
-
-      // ── 8. Build salary breakdown for Receipt UI ──────────────
-      const afterLimit = amount - expenseLimit;
-      const rentShortfallCalc = (afterLimit < dynamicRent && dynamicRent > 0)
-        ? dynamicRent - Math.max(0, afterLimit) : 0;
-      salaryBreakdown = {
-        totalSalary: amount,
-        expenseLimit,
-        dynamicRent,
-        rentShortfall: rentShortfallCalc,
-        rentShortfallSource: rentShortfallCalc > 0 ? (await prisma.savingsGoal.findFirst({ orderBy: { priority: "desc" } }))?.name : null,
-        availableForGoals: availableSavings,
-        goalDistribution: suggestedAllocations,
-        closingNotes: closingNotes.length > 0 ? closingNotes : null,
-        cycleNotes: newCycleNotes.length > 0 ? newCycleNotes : null,
-      };
-    }
-
-    // ── Find the correct cycle for this transaction's date ────
-    // For salary, use the newly created cycle.
-    // For everything else, find by date range.
+    // ── Find the correct monthly cycle for this transaction's date ──
     let targetCycleId = null;
-
-    if (newCycle) {
-      targetCycleId = newCycle.id;
+    const matchingCycle = await findCycleForDate(txDate);
+    if (matchingCycle) {
+      targetCycleId = matchingCycle.id;
     } else {
-      // Find the cycle whose date range covers this transaction's date
-      const matchingCycle = await findCycleForDate(txDate);
-      targetCycleId = matchingCycle?.id || null;
+      // If no cycle exists for this date, try to create one (for backdated transactions)
+      const { start, end } = getMonthBounds(txDate);
+      const limitSetting = await prisma.setting.findUnique({ where: { key: "expense_limit" } });
+      const expenseLimit = parseFloat(limitSetting?.value || "300");
+
+      const newCycle = await prisma.cycle.create({
+        data: {
+          startDate: start,
+          endDate: end,
+          salaryAmount: 0,
+          expenseLimit,
+          status: txDate < new Date() ? "CLOSED" : "ACTIVE",
+        },
+      });
+      targetCycleId = newCycle.id;
     }
 
     const transaction = await prisma.transaction.create({
@@ -348,49 +132,37 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
         paymentMethod,
         description,
         amount,
-        walletId,
+        walletId: walletId || null,
         cycleId: targetCycleId,
       },
-      include: { wallet: { select: { name: true } } },
     });
 
-    // ── Update wallet balance ─────────────────────────────────
-    const balanceChange = transactionType === "INCOME" ? amount : -amount;
-    await prisma.wallet.update({
-      where: { id: walletId },
-      data: { balance: { increment: balanceChange } },
-    });
-
-    const response = {
-      success: true,
-      data: { ...transaction, amount: Number(transaction.amount), walletName: transaction.wallet?.name },
-    };
-
-    // Add salary-specific data to the response
-    if (isSalary) {
-      response.cycleCreated = true;
-      response.cycle = {
-        ...newCycle,
-        salaryAmount: Number(newCycle.salaryAmount),
-        expenseLimit: Number(newCycle.expenseLimit),
-        rolloverAmount: Number(newCycle.rolloverAmount),
-        cycleNotes: newCycle.cycleNotes,
-      };
-      response.rolloverAmount = rolloverAmount;
-      response.availableSavings = availableSavings;
-      response.suggestedAllocations = suggestedAllocations;
-      response.salaryBreakdown = salaryBreakdown;
+    // If this is a salary transaction, update the cycle's salaryAmount
+    if (category.toLowerCase() === "salary" && transactionType === "INCOME" && targetCycleId) {
+      const salaryAgg = await prisma.transaction.aggregate({
+        where: {
+          cycleId: targetCycleId,
+          transactionType: "INCOME",
+          category: { in: ["Salary", "salary"] },
+        },
+        _sum: { amount: true },
+      });
+      await prisma.cycle.update({
+        where: { id: targetCycleId },
+        data: { salaryAmount: Number(salaryAgg._sum.amount || 0) },
+      });
     }
 
-    // Include which cycle it was assigned to (helpful for UI feedback)
-    response.assignedCycleId = targetCycleId;
-
-    // Trigger synchronization of the target cycle to update allocations/rollovers
+    // Trigger synchronization of the target cycle to update allocations
     if (targetCycleId) {
       await syncCycle(targetCycleId);
     }
 
-    res.status(201).json(response);
+    res.status(201).json({
+      success: true,
+      data: { ...transaction, amount: Number(transaction.amount) },
+      assignedCycleId: targetCycleId,
+    });
   } catch (error) {
     next(error);
   }
@@ -417,72 +189,23 @@ router.put("/:id", validate(updateTransactionSchema, "body"), async (req, res, n
     if (req.body.category) updateData.category = req.body.category;
     if (req.body.paymentMethod) updateData.paymentMethod = req.body.paymentMethod;
     if (req.body.description) updateData.description = req.body.description;
-    if (req.body.walletId) updateData.walletId = req.body.walletId;
 
-    // If date changed, reassign to the correct cycle
+    // If date changed, reassign to the correct monthly cycle
     const newDate = req.body.date ? new Date(req.body.date) : existing.date;
     if (req.body.date) {
       updateData.date = newDate;
-      // Find the cycle this date belongs to and reassign
       const matchingCycle = await findCycleForDate(newDate);
       updateData.cycleId = matchingCycle?.id || null;
     }
 
-    const isCycle1Exception = newDate >= new Date("2026-04-08") && newDate <= new Date("2026-04-21T23:59:59");
-    const checkCategory = req.body.category || existing.category;
-    
-    // Rent Sourcing Exception
-    if (isCycle1Exception && checkCategory.toLowerCase() === "rent") {
-      const setupFund = await prisma.wallet.findFirst({ where: { name: { contains: "Setup" } } });
-      if (setupFund) {
-        req.body.walletId = setupFund.id;
-        updateData.walletId = setupFund.id;
-      }
-    }
-
-    // Handle amount changes — update wallet balance accordingly
+    // Handle amount changes
     if (req.body.amount !== undefined) {
-      const oldAmount = Number(existing.amount);
-      const newAmount = req.body.amount;
-      const oldType = existing.transactionType;
-      const newType = req.body.transactionType || oldType;
-
-      // Reverse old balance impact
-      const oldImpact = oldType === "INCOME" ? -oldAmount : oldAmount;
-      // Apply new balance impact
-      const newImpact = newType === "INCOME" ? newAmount : -newAmount;
-      const netChange = oldImpact + newImpact;
-
-      const targetWalletId = req.body.walletId || existing.walletId;
-
-      if (netChange !== 0) {
-        await prisma.wallet.update({
-          where: { id: targetWalletId },
-          data: { balance: { increment: netChange } },
-        });
-      }
-
-      // If wallet changed, also reverse from old wallet
-      if (req.body.walletId && req.body.walletId !== existing.walletId) {
-        const reverseOld = oldType === "INCOME" ? -oldAmount : oldAmount;
-        await prisma.wallet.update({
-          where: { id: existing.walletId },
-          data: { balance: { increment: reverseOld } },
-        });
-        const applyNew = newType === "INCOME" ? newAmount : -newAmount;
-        await prisma.wallet.update({
-          where: { id: req.body.walletId },
-          data: { balance: { increment: applyNew } },
-        });
-      }
-
-      updateData.amount = newAmount;
+      updateData.amount = req.body.amount;
     }
 
     const updated = await prisma.transaction.update({
       where: { id },
       data: updateData,
-      include: { wallet: { select: { name: true } } },
     });
 
     // Synchronize cycles affected by the edit
@@ -493,9 +216,26 @@ router.put("/:id", validate(updateTransactionSchema, "body"), async (req, res, n
       await syncCycle(updated.cycleId);
     }
 
+    // If salary amount changed, update the cycle's salaryAmount
+    const checkCategory = req.body.category || existing.category;
+    if (checkCategory.toLowerCase() === "salary" && updated.cycleId) {
+      const salaryAgg = await prisma.transaction.aggregate({
+        where: {
+          cycleId: updated.cycleId,
+          transactionType: "INCOME",
+          category: { in: ["Salary", "salary"] },
+        },
+        _sum: { amount: true },
+      });
+      await prisma.cycle.update({
+        where: { id: updated.cycleId },
+        data: { salaryAmount: Number(salaryAgg._sum.amount || 0) },
+      });
+    }
+
     res.json({
       success: true,
-      data: { ...updated, amount: Number(updated.amount), walletName: updated.wallet?.name },
+      data: { ...updated, amount: Number(updated.amount) },
     });
   } catch (error) {
     next(error);
@@ -517,21 +257,27 @@ router.delete("/:id", async (req, res, next) => {
       return res.status(404).json({ success: false, message: `Transaction ${id} not found` });
     }
 
-    // Reverse the wallet balance impact
-    const reversal = existing.transactionType === "INCOME"
-      ? -Number(existing.amount)
-      : Number(existing.amount);
-
-    await prisma.wallet.update({
-      where: { id: existing.walletId },
-      data: { balance: { increment: reversal } },
-    });
-
     await prisma.transaction.delete({ where: { id } });
 
     // Synchronize the cycle affected by the deletion
     if (existing.cycleId) {
       await syncCycle(existing.cycleId);
+
+      // If it was a salary, update the cycle's salaryAmount
+      if (existing.category.toLowerCase() === "salary" && existing.transactionType === "INCOME") {
+        const salaryAgg = await prisma.transaction.aggregate({
+          where: {
+            cycleId: existing.cycleId,
+            transactionType: "INCOME",
+            category: { in: ["Salary", "salary"] },
+          },
+          _sum: { amount: true },
+        });
+        await prisma.cycle.update({
+          where: { id: existing.cycleId },
+          data: { salaryAmount: Number(salaryAgg._sum.amount || 0) },
+        });
+      }
     }
 
     res.json({ success: true, message: `Transaction ${id} deleted` });

@@ -33,7 +33,8 @@ const createTransactionSchema = z.object({
   walletId: z
     .number()
     .int()
-    .positive("Wallet ID must be a positive integer"),
+    .positive("Wallet ID must be a positive integer")
+    .optional(),
 });
 
 const updateTransactionSchema = z.object({
@@ -59,7 +60,6 @@ const queryTransactionsSchema = z.object({
   transactionType: z.enum(["INCOME", "EXPENSE"]).optional(),
   category: z.string().optional(),
   paymentMethod: z.string().optional(),
-  walletId: z.coerce.number().int().positive().optional(),
   cycleId: z.coerce.number().int().positive().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -118,13 +118,6 @@ const summaryQuerySchema = z.object({
   endDate: z.string().optional(),
 });
 
-// ── Cash Flow Schemas ───────────────────────────────────────
-
-const cashflowQuerySchema = z.object({
-  period: z.enum(["fortnightly", "monthly"]).default("fortnightly"),
-  cycleId: z.coerce.number().int().positive().optional(),
-});
-
 module.exports = {
   createTransactionSchema,
   updateTransactionSchema,
@@ -134,5 +127,4 @@ module.exports = {
   allocateSavingsSchema,
   updateSettingSchema,
   summaryQuerySchema,
-  cashflowQuerySchema,
 };

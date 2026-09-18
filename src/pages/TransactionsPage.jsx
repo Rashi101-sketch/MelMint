@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import TransactionTable from "../components/TransactionTable";
-import { getTransactions, getWallets } from "../services/api";
+import { getTransactions } from "../services/api";
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);
@@ -9,7 +9,6 @@ export default function TransactionsPage() {
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
   const [page, setPage] = useState(1);
-  const [wallets, setWallets] = useState([]);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -24,17 +23,7 @@ export default function TransactionsPage() {
     }
   }, [page, sortBy, sortOrder]);
 
-  const fetchWallets = useCallback(async () => {
-    try {
-      const res = await getWallets();
-      setWallets(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch wallets:", err);
-    }
-  }, []);
-
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
-  useEffect(() => { fetchWallets(); }, [fetchWallets]);
 
   return (
     <div className="space-y-6">
@@ -54,7 +43,6 @@ export default function TransactionsPage() {
         sortBy={sortBy}
         sortOrder={sortOrder}
         onRefresh={() => { setPage(1); fetchTransactions(); }}
-        wallets={wallets}
       />
     </div>
   );

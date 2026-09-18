@@ -29,7 +29,6 @@ const EMPTY_ROW = {
 export default function TransactionTable({
   transactions, pagination, loading,
   onPageChange, onSortChange, sortBy, sortOrder, onRefresh,
-  wallets,
 }) {
   const [editingCell, setEditingCell] = useState(null); // { id, field }
   const [editValue, setEditValue] = useState("");
@@ -166,18 +165,11 @@ export default function TransactionTable({
       return;
     }
 
-    const walletId = wallets?.[0]?.id;
-    if (!walletId) {
-      toast.error("No wallet available");
-      return;
-    }
-
     setAddingRow(true);
     try {
       await createTransaction({
         ...newRow,
         amount: parseFloat(newRow.amount),
-        walletId,
       });
       toast.success(`${newRow.transactionType === "INCOME" ? "Income" : "Expense"} added!`);
       setNewRow({ ...EMPTY_ROW });

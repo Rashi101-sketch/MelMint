@@ -71,9 +71,7 @@ export default function SalaryReceipt() {
   // For active cycles with null endDate, calculate estimated end
   const getCycleEndLabel = (cycle) => {
     if (cycle.endDate) return formatDate(cycle.endDate);
-    const est = new Date(cycle.startDate);
-    est.setDate(est.getDate() + 14);
-    return formatDate(est);
+    return "Ongoing";
   };
 
   const formatCurrency = (n) =>

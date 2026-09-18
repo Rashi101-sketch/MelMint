@@ -1,41 +1,34 @@
 import { useState, useEffect, useCallback } from "react";
 import SummaryCards from "../components/SummaryCards";
-import WalletCards from "../components/WalletCards";
 import CycleTracker from "../components/CycleTracker";
-import CashFlowChart from "../components/CashFlowChart";
 import SavingsGoals from "../components/SavingsGoals";
-import SavingsAllocationModal from "../components/SavingsAllocationModal";
 import TransactionTable from "../components/TransactionTable";
 import SalaryReceipt from "../components/SalaryReceipt";
 import CycleDashboard from "../components/CycleDashboard";
 import {
-  getWallets, getCurrentCycle, getSavingsGoals,
+  getCurrentCycle, getSavingsGoals,
   getSummary, getSettings, getTransactions,
 } from "../services/api";
 
 export default function DashboardPage() {
-  const [wallets, setWallets] = useState([]);
   const [cycle, setCycle] = useState(null);
   const [goals, setGoals] = useState([]);
   const [summary, setSummary] = useState(null);
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
-  const [salaryData, setSalaryData] = useState(null);
   const [recentTx, setRecentTx] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [walletsRes, cycleRes, goalsRes, summaryRes, settingsRes] = await Promise.all([
-        getWallets(),
+      const [cycleRes, goalsRes, summaryRes, settingsRes] = await Promise.all([
         getCurrentCycle(),
         getSavingsGoals(),
         getSummary(),
         getSettings(),
       ]);
 
-      setWallets(walletsRes.data || []);
       setCycle(cycleRes.data || null);
       setGoals(goalsRes.data || []);
       setSummary(summaryRes.data || null);
@@ -61,10 +54,6 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchAll(); fetchRecent(); }, [fetchAll, fetchRecent]);
 
-  const handleSalaryAdded = (data) => {
-    setSalaryData(data);
-  };
-
   const handleRefresh = () => {
     fetchAll();
     fetchRecent();
@@ -75,22 +64,16 @@ export default function DashboardPage() {
       {/* Summary Cards */}
       <SummaryCards summary={summary} loading={loading} />
 
-      {/* Cash Flow Chart — full width, prominent */}
-      <CashFlowChart />
-
-      {/* Wallets + Salary Receipt Row */}
+      {/* Salary Receipt + Cycle Tracker */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <WalletCards wallets={wallets} loading={loading} />
         <SalaryReceipt />
+        <CycleTracker
+          cycle={cycle}
+          settings={settings}
+          loading={loading}
+          onSettingChange={fetchAll}
+        />
       </div>
-
-      {/* Cycle Tracker */}
-      <CycleTracker
-        cycle={cycle}
-        settings={settings}
-        loading={loading}
-        onSettingChange={fetchAll}
-      />
 
       {/* Cycle History Dashboard */}
       <CycleDashboard />
@@ -110,21 +93,11 @@ export default function DashboardPage() {
           sortBy="date"
           sortOrder="desc"
           onRefresh={handleRefresh}
-          wallets={wallets}
         />
       </div>
 
       {/* Savings Goals */}
       <SavingsGoals goals={goals} loading={loading} onRefresh={fetchAll} />
-
-      {/* Savings Allocation Modal */}
-      {salaryData && (
-        <SavingsAllocationModal
-          salaryData={salaryData}
-          onClose={() => setSalaryData(null)}
-          onAllocated={fetchAll}
-        />
-      )}
     </div>
   );
 }

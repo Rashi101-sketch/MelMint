@@ -43,8 +43,8 @@ model Transaction {
   description     String          @db.VarChar(255)
   amount          Decimal         @db.Decimal(12, 2)
 
-  walletId        Int             @map("wallet_id")
-  wallet          Wallet          @relation(fields: [walletId], references: [id])
+  walletId        Int?            @map("wallet_id")
+  wallet          Wallet?         @relation(fields: [walletId], references: [id])
 
   cycleId         Int?            @map("cycle_id")
   cycle           Cycle?          @relation(fields: [cycleId], references: [id])

@@ -41,9 +41,7 @@ export default function CycleDashboard() {
 
   const getCycleEndLabel = (cycle) => {
     if (cycle.endDate) return formatDate(cycle.endDate);
-    const est = new Date(cycle.startDate);
-    est.setDate(est.getDate() + 14);
-    return formatDate(est);
+    return "Ongoing";
   };
 
   const formatCurrency = (n) =>

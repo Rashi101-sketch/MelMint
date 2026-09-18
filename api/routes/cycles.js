@@ -4,10 +4,12 @@ const prisma = require("../lib/prisma");
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/cycles — List all cycles (history) with full stats
+// Only shows non-LEGACY cycles (monthly cycles)
 // ─────────────────────────────────────────────────────────────
 router.get("/", async (req, res, next) => {
   try {
     const cycles = await prisma.cycle.findMany({
+      where: { status: { in: ["ACTIVE", "CLOSED"] } },
       orderBy: { startDate: "desc" },
       include: {
         _count: { select: { transactions: true } },
@@ -54,13 +56,6 @@ router.get("/", async (req, res, next) => {
         let adjustedExpenseLimit = baseLimit + extraIncome;
         const regularExpenses = Number(regularExpenseAgg._sum.amount || 0);
 
-        // Cycle 1 Exception
-        const isCycle1Exception = cycle.startDate >= new Date("2026-04-08") && cycle.startDate <= new Date("2026-04-21T23:59:59");
-        if (isCycle1Exception) {
-          adjustedExpenseLimit = salaryIncome + extraIncome; // exact pooled income budget
-          baseLimit = adjustedExpenseLimit;
-        }
-
         // Dynamic rent: sum of Rent transactions in this cycle
         const rentAgg = await prisma.transaction.aggregate({
           where: {
@@ -74,7 +69,7 @@ router.get("/", async (req, res, next) => {
 
         return {
           ...cycle,
-          salaryAmount: Number(cycle.salaryAmount),
+          salaryAmount: salaryIncome || Number(cycle.salaryAmount),
           expenseLimit: baseLimit,
           adjustedExpenseLimit,
           extraIncome,
@@ -112,12 +107,11 @@ router.get("/current", async (req, res, next) => {
       return res.json({
         success: true,
         data: null,
-        message: "No active cycle. Add a salary transaction to start one.",
+        message: "No active cycle.",
       });
     }
 
     // Get expense breakdown for this cycle
-    // Separate regular expenses (excl. rent) for limit tracking
     const [expenseAgg, regularExpenseAgg, salaryIncomeAgg, extraIncomeAgg, expensesByCategory, savingsGoals] = await Promise.all([
       prisma.transaction.aggregate({
         where: { cycleId: activeCycle.id, transactionType: "EXPENSE" },
@@ -131,7 +125,6 @@ router.get("/current", async (req, res, next) => {
         },
         _sum: { amount: true },
       }),
-      // Salary income only
       prisma.transaction.aggregate({
         where: {
           cycleId: activeCycle.id,
@@ -140,7 +133,6 @@ router.get("/current", async (req, res, next) => {
         },
         _sum: { amount: true },
       }),
-      // Extra income (non-salary)
       prisma.transaction.aggregate({
         where: {
           cycleId: activeCycle.id,
@@ -157,7 +149,7 @@ router.get("/current", async (req, res, next) => {
         orderBy: { _sum: { amount: "desc" } },
       }),
       prisma.savingsGoal.findMany({
-        orderBy: { priority: "desc" }, // least important first
+        orderBy: { priority: "desc" },
       }),
     ]);
 
@@ -167,26 +159,15 @@ router.get("/current", async (req, res, next) => {
     const extraIncome = Number(extraIncomeAgg._sum.amount || 0);
     const totalIncome = salaryIncome + extraIncome;
     let baseExpenseLimit = Number(activeCycle.expenseLimit);
-
-    // Extra income boosts the expense limit
     let adjustedExpenseLimit = baseExpenseLimit + extraIncome;
-
-    // Cycle 1 Exception
-    const isCycle1Exception = activeCycle.startDate >= new Date("2026-04-08") && activeCycle.startDate <= new Date("2026-04-21T23:59:59");
-    if (isCycle1Exception) {
-      adjustedExpenseLimit = totalIncome; // exact pooled income budget
-      baseExpenseLimit = adjustedExpenseLimit;
-    }
 
     const remaining = adjustedExpenseLimit - regularExpenses;
 
-    // Overspend detection — if expenses exceed the adjusted limit
+    // Overspend detection
     const overspend = Math.max(0, regularExpenses - adjustedExpenseLimit);
     let overspendDeduction = null;
 
     if (overspend > 0 && savingsGoals.length > 0) {
-      // Find least important goal(s) with savings to deduct from
-      // Goals sorted by priority DESC = least important first
       let amountToDeduct = overspend;
       const deductions = [];
 
@@ -209,16 +190,17 @@ router.get("/current", async (req, res, next) => {
       overspendDeduction = {
         totalOverspend: overspend,
         deductions,
-        unrecoverable: amountToDeduct, // amount that couldn't be covered by any goal
+        unrecoverable: amountToDeduct,
       };
     }
 
-    // Calculate days into cycle and estimated end
+    // Calculate days into cycle using actual month dates
     const startDate = new Date(activeCycle.startDate);
+    const endDate = activeCycle.endDate ? new Date(activeCycle.endDate) : new Date(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0);
     const today = new Date();
     const daysIntoCycle = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-    const estimatedEndDate = new Date(startDate);
-    estimatedEndDate.setDate(estimatedEndDate.getDate() + 14);
+    const totalDaysInCycle = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    const daysLeft = Math.max(0, totalDaysInCycle - daysIntoCycle);
 
     // Dynamic rent for this cycle
     const rentAgg = await prisma.transaction.aggregate({
@@ -235,7 +217,7 @@ router.get("/current", async (req, res, next) => {
       success: true,
       data: {
         ...activeCycle,
-        salaryAmount: Number(activeCycle.salaryAmount),
+        salaryAmount: salaryIncome || Number(activeCycle.salaryAmount),
         expenseLimit: baseExpenseLimit,
         adjustedExpenseLimit,
         extraIncome,
@@ -248,7 +230,9 @@ router.get("/current", async (req, res, next) => {
         overspend,
         overspendDeduction,
         daysIntoCycle,
-        estimatedEndDate: estimatedEndDate.toISOString(),
+        daysLeft,
+        totalDaysInCycle,
+        estimatedEndDate: endDate.toISOString(),
         transactionCount: activeCycle._count.transactions,
         cycleNotes: activeCycle.cycleNotes || null,
         categoryBreakdown: expensesByCategory.map((item) => ({
@@ -265,7 +249,6 @@ router.get("/current", async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/cycles/:id — Get a single cycle with full stats
-// (Used by Salary Receipt and Cycle Dashboard for historical views)
 // ─────────────────────────────────────────────────────────────
 router.get("/:id", async (req, res, next) => {
   try {
@@ -340,13 +323,6 @@ router.get("/:id", async (req, res, next) => {
     const totalExpenses = Number(expenseAgg._sum.amount || 0);
     const totalIncome = salaryIncome + extraIncome;
 
-    // Cycle 1 Exception
-    const isCycle1Exception = cycle.startDate >= new Date("2026-04-08") && cycle.startDate <= new Date("2026-04-21T23:59:59");
-    if (isCycle1Exception) {
-      adjustedExpenseLimit = totalIncome;
-      baseLimit = adjustedExpenseLimit;
-    }
-
     const remaining = adjustedExpenseLimit - regularExpenses;
 
     // Salary breakdown for Receipt view
@@ -361,7 +337,7 @@ router.get("/:id", async (req, res, next) => {
       success: true,
       data: {
         ...cycle,
-        salaryAmount: Number(cycle.salaryAmount),
+        salaryAmount: salaryIncome || Number(cycle.salaryAmount),
         expenseLimit: baseLimit,
         adjustedExpenseLimit,
         extraIncome,
