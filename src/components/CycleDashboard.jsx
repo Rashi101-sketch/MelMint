@@ -202,6 +202,76 @@ export default function CycleDashboard() {
           })}
         </div>
       )}
+
+      {/* Monthly Summary (closed cycles with monthlySummary data) */}
+      {selectedCycle?.status === "CLOSED" && selectedCycle?.monthlySummary && (
+        <div className="mt-4 space-y-3">
+          <p className="text-[10px] text-surface-500 uppercase tracking-wider font-semibold">
+            Month-End Summary
+          </p>
+
+          {/* Pool 1: Salary Allocation */}
+          {selectedCycle.monthlySummary.salaryAllocation && (
+            <div className="p-3 rounded-xl bg-surface-900/30 border border-surface-700/30">
+              <p className="text-[9px] text-mint-500 uppercase tracking-wider font-semibold mb-2">
+                Pool 1: Salary Allocation
+              </p>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-surface-400">Available for Goals</span>
+                <span className="text-mint-400 font-semibold">
+                  {formatCurrency(selectedCycle.monthlySummary.salaryAllocation.availableForGoals)}
+                </span>
+              </div>
+              {selectedCycle.monthlySummary.salaryAllocation.breakdown?.map((item) => (
+                <div key={item.goalId} className="flex justify-between text-xs ml-3">
+                  <span className="text-surface-500 flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-mint-500 inline-block" />
+                    {item.goalName} ({item.percentage}%)
+                  </span>
+                  <span className="text-surface-300">{formatCurrency(item.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pool 2: Expense Rollover */}
+          {selectedCycle.monthlySummary.expenseRollover && (
+            <div className="p-3 rounded-xl bg-surface-900/30 border border-surface-700/30">
+              <p className="text-[9px] text-blue-400 uppercase tracking-wider font-semibold mb-2">
+                Pool 2: Expense Rollover
+              </p>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-surface-400">Adjusted Limit</span>
+                <span className="text-surface-300">{formatCurrency(selectedCycle.monthlySummary.expenseRollover.adjustedLimit)}</span>
+              </div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-surface-400">Actually Spent</span>
+                <span className="text-surface-300">{formatCurrency(selectedCycle.monthlySummary.expenseRollover.spent)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-surface-400">
+                  {selectedCycle.monthlySummary.expenseRollover.amount >= 0 ? "Rollover" : "Overspend"}
+                  {selectedCycle.monthlySummary.expenseRollover.goalName && (
+                    <span className="text-surface-600"> → {selectedCycle.monthlySummary.expenseRollover.goalName}</span>
+                  )}
+                </span>
+                <span className={`font-semibold ${selectedCycle.monthlySummary.expenseRollover.amount >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {selectedCycle.monthlySummary.expenseRollover.amount < 0 && "−"}
+                  {formatCurrency(selectedCycle.monthlySummary.expenseRollover.amount)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Total Savings */}
+          <div className="flex justify-between items-center p-2 rounded-lg bg-mint-500/10 border border-mint-500/20">
+            <span className="text-xs text-mint-400 font-semibold">Total Savings This Month</span>
+            <span className="text-sm text-mint-400 font-bold">
+              {formatCurrency(selectedCycle.monthlySummary.totalSavings || 0)}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

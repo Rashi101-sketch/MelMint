@@ -1,7 +1,7 @@
 import { HiPlus, HiTrash, HiPencil, HiCheck, HiX, HiChevronDown, HiChevronUp } from "react-icons/hi";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { addToSavingsGoal, createSavingsGoal, deleteSavingsGoal, updateSavingsGoal, getSavingsContributions } from "../services/api";
+import { addToSavingsGoal, createSavingsGoal, deleteSavingsGoal, updateSavingsGoal, getSavingsContributions, updateSetting } from "../services/api";
 
 const GOAL_ICONS = {
   "University Fees": "🎓",
@@ -32,7 +32,7 @@ function getGoalStyle(name, idx) {
   return { icon, ...colorSet };
 }
 
-export default function SavingsGoals({ goals, loading, onRefresh }) {
+export default function SavingsGoals({ goals, loading, onRefresh, settings }) {
   const [addAmounts, setAddAmounts] = useState({});
   const [addingId, setAddingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -196,6 +196,53 @@ export default function SavingsGoals({ goals, loading, onRefresh }) {
           {showForm ? <><HiX className="w-3 h-3" /> Cancel</> : <><HiPlus className="w-3 h-3" /> New Goal</>}
         </button>
       </div>
+
+      {/* Rollover & Overspend Goal Settings */}
+      {goals.length > 0 && (
+        <div className="mb-5 p-3 rounded-xl bg-surface-900/30 border border-surface-700/30">
+          <p className="text-[10px] text-surface-500 uppercase tracking-wider font-semibold mb-2.5">Month-End Routing</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-surface-400 whitespace-nowrap">Rollover →</span>
+              <select
+                value={settings?.rollover_goal_id || ""}
+                onChange={async (e) => {
+                  try {
+                    await updateSetting("rollover_goal_id", e.target.value);
+                    toast.success(`Rollover goal updated`);
+                    onRefresh?.();
+                  } catch { toast.error("Failed to update"); }
+                }}
+                className="cycle-select text-xs flex-1"
+                id="rollover-goal-select"
+              >
+                {goals.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-surface-400 whitespace-nowrap">Overspend →</span>
+              <select
+                value={settings?.overspend_goal_id || ""}
+                onChange={async (e) => {
+                  try {
+                    await updateSetting("overspend_goal_id", e.target.value);
+                    toast.success(`Overspend goal updated`);
+                    onRefresh?.();
+                  } catch { toast.error("Failed to update"); }
+                }}
+                className="cycle-select text-xs flex-1"
+                id="overspend-goal-select"
+              >
+                {goals.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Form */}
       {showForm && (

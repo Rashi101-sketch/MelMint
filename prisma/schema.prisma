@@ -85,6 +85,7 @@ model Cycle {
   rolloverAmount Decimal   @default(0) @map("rollover_amount") @db.Decimal(12, 2)
   status         String    @default("ACTIVE") @db.VarChar(20)
   cycleNotes     String?   @map("cycle_notes") @db.Text
+  monthlySummary Json?     @map("monthly_summary")
 
   transactions   Transaction[]
   contributions  SavingsContribution[]

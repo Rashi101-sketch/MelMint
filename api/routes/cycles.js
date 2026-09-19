@@ -226,6 +226,59 @@ router.get("/current", async (req, res, next) => {
     });
     const dynamicRent = Number(rentAgg._sum.amount || 0);
 
+    // ── Projected Savings Preview (Pool 1 + Pool 2) ──
+    // Read configured rollover/overspend goals
+    const [rolloverSetting, overspendSetting] = await Promise.all([
+      prisma.setting.findUnique({ where: { key: "rollover_goal_id" } }),
+      prisma.setting.findUnique({ where: { key: "overspend_goal_id" } }),
+    ]);
+
+    const goalsAsc = [...savingsGoals].sort((a, b) => a.priority - b.priority);
+    const priorityMostImportant = goalsAsc[0];
+    const priorityLeastImportant = goalsAsc[goalsAsc.length - 1];
+
+    const rolloverGoal = rolloverSetting
+      ? goalsAsc.find(g => g.id === Number(rolloverSetting.value)) || priorityMostImportant
+      : priorityMostImportant;
+
+    const overspendGoalObj = overspendSetting
+      ? goalsAsc.find(g => g.id === Number(overspendSetting.value)) || priorityLeastImportant
+      : priorityLeastImportant;
+
+    // Pool 1: Salary allocation preview
+    const projectedAvailableForGoals = Math.max(0, parseFloat((salaryIncome - dynamicRent - baseExpenseLimit).toFixed(2)));
+    const goalBreakdown = goalsAsc
+      .filter(g => g.percentage > 0)
+      .map(g => ({
+        goalId: g.id,
+        goalName: g.name,
+        percentage: g.percentage,
+        amount: parseFloat(((g.percentage / 100) * projectedAvailableForGoals).toFixed(2)),
+      }));
+
+    // Pool 2: Expense rollover preview
+    const projectedRollover = Math.max(0, parseFloat((adjustedExpenseLimit - regularExpenses).toFixed(2)));
+    const projectedOverspend = Math.max(0, parseFloat((regularExpenses - adjustedExpenseLimit).toFixed(2)));
+
+    const projectedSavings = {
+      totalSalary: salaryIncome,
+      rent: dynamicRent,
+      budgetCommitment: baseExpenseLimit,
+      availableForGoals: projectedAvailableForGoals,
+      goalBreakdown,
+      expenseRollover: {
+        adjustedLimit: adjustedExpenseLimit,
+        spent: regularExpenses,
+        projectedRollover,
+        projectedOverspend,
+        rolloverGoalName: rolloverGoal?.name || null,
+        rolloverGoalId: rolloverGoal?.id || null,
+        overspendGoalName: overspendGoalObj?.name || null,
+        overspendGoalId: overspendGoalObj?.id || null,
+      },
+      isPreview: true,
+    };
+
     res.json({
       success: true,
       data: {
@@ -249,6 +302,7 @@ router.get("/current", async (req, res, next) => {
         estimatedEndDate: endDate.toISOString(),
         transactionCount: activeCycle._count.transactions,
         cycleNotes: activeCycle.cycleNotes || null,
+        projectedSavings,
         categoryBreakdown: expensesByCategory.map((item) => ({
           category: item.category,
           amount: Number(item._sum.amount),

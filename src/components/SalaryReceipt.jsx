@@ -196,9 +196,14 @@ export default function SalaryReceipt() {
             {/* Goal Distribution */}
             {goals.length > 0 && availableForGoals > 0 && (
               <>
-                <div className="receipt-divider" />
-                <p className="text-[10px] text-surface-500 uppercase tracking-wider font-semibold">
+              <div className="receipt-divider" />
+                <p className="text-[10px] text-surface-500 uppercase tracking-wider font-semibold flex items-center gap-2">
                   Savings Distribution
+                  {selectedCycle?.status === "ACTIVE" && (
+                    <span className="badge badge-cycle text-[8px] px-1.5 py-0.5 normal-case tracking-normal">
+                      Preview — locks in at month-end
+                    </span>
+                  )}
                 </p>
                 <div className="space-y-1.5">
                   {goals
