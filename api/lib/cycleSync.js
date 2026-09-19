@@ -36,9 +36,15 @@ async function syncCycle(cycleId) {
       .filter(t => t.transactionType === "EXPENSE" && !["Rent", "rent"].includes(t.category))
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-    const extraIncome = cycle.transactions
-      .filter(t => t.transactionType === "INCOME" && !["Salary", "salary"].includes(t.category))
+    // Only Interest-category income is eligible to boost the expense limit
+    const interestIncome = cycle.transactions
+      .filter(t => t.transactionType === "INCOME" && t.category === "Interest")
       .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    // Read the interest boost toggle
+    const boostSetting = await prisma.setting.findUnique({ where: { key: "interest_boosts_limit" } });
+    const interestBoostsLimit = boostSetting?.value !== "false";
+    const limitBoost = interestBoostsLimit ? interestIncome : 0;
 
     const isCycle1Exception = cycle.startDate >= new Date("2026-04-08") && cycle.startDate <= new Date("2026-04-21T23:59:59");
 
@@ -148,9 +154,9 @@ async function syncCycle(cycleId) {
     // B2. Only calculate and apply end-of-cycle rollover/overspend if CLOSED!
     if (cycle.status === "CLOSED") {
       let baseLimit = Number(cycle.expenseLimit);
-      let adjustedLimit = baseLimit + extraIncome;
+      let adjustedLimit = baseLimit + limitBoost;
       if (isCycle1Exception) {
-        adjustedLimit = salaryAmount + extraIncome;
+        adjustedLimit = salaryAmount + limitBoost;
       }
 
       const remaining = adjustedLimit - regularExpenses;

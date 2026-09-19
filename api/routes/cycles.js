@@ -16,10 +16,14 @@ router.get("/", async (req, res, next) => {
       },
     });
 
+    // Read the interest boost toggle
+    const boostSetting = await prisma.setting.findUnique({ where: { key: "interest_boosts_limit" } });
+    const interestBoostsLimit = boostSetting?.value !== "false";
+
     // For each cycle, compute full stats
     const cyclesWithStats = await Promise.all(
       cycles.map(async (cycle) => {
-        const [expenseAgg, regularExpenseAgg, extraIncomeAgg, salaryIncomeAgg] = await Promise.all([
+        const [expenseAgg, regularExpenseAgg, interestIncomeAgg, salaryIncomeAgg] = await Promise.all([
           prisma.transaction.aggregate({
             where: { cycleId: cycle.id, transactionType: "EXPENSE" },
             _sum: { amount: true },
@@ -32,11 +36,12 @@ router.get("/", async (req, res, next) => {
             },
             _sum: { amount: true },
           }),
+          // Only Interest-category income can boost the expense limit
           prisma.transaction.aggregate({
             where: {
               cycleId: cycle.id,
               transactionType: "INCOME",
-              category: { notIn: ["Salary", "salary"] },
+              category: "Interest",
             },
             _sum: { amount: true },
           }),
@@ -51,9 +56,10 @@ router.get("/", async (req, res, next) => {
         ]);
 
         let baseLimit = Number(cycle.expenseLimit);
-        const extraIncome = Number(extraIncomeAgg._sum.amount || 0);
+        const interestIncome = Number(interestIncomeAgg._sum.amount || 0);
         const salaryIncome = Number(salaryIncomeAgg._sum.amount || 0);
-        let adjustedExpenseLimit = baseLimit + extraIncome;
+        const limitBoost = interestBoostsLimit ? interestIncome : 0;
+        let adjustedExpenseLimit = baseLimit + limitBoost;
         const regularExpenses = Number(regularExpenseAgg._sum.amount || 0);
 
         // Dynamic rent: sum of Rent transactions in this cycle
@@ -72,7 +78,8 @@ router.get("/", async (req, res, next) => {
           salaryAmount: salaryIncome || Number(cycle.salaryAmount),
           expenseLimit: baseLimit,
           adjustedExpenseLimit,
-          extraIncome,
+          interestIncome,
+          interestBoostsLimit,
           dynamicRent,
           rolloverAmount: Number(cycle.rolloverAmount),
           totalExpenses: Number(expenseAgg._sum.amount || 0),
@@ -111,8 +118,12 @@ router.get("/current", async (req, res, next) => {
       });
     }
 
+    // Read the interest boost toggle
+    const boostSetting = await prisma.setting.findUnique({ where: { key: "interest_boosts_limit" } });
+    const interestBoostsLimit = boostSetting?.value !== "false";
+
     // Get expense breakdown for this cycle
-    const [expenseAgg, regularExpenseAgg, salaryIncomeAgg, extraIncomeAgg, expensesByCategory, savingsGoals] = await Promise.all([
+    const [expenseAgg, regularExpenseAgg, salaryIncomeAgg, interestIncomeAgg, expensesByCategory, savingsGoals] = await Promise.all([
       prisma.transaction.aggregate({
         where: { cycleId: activeCycle.id, transactionType: "EXPENSE" },
         _sum: { amount: true },
@@ -133,11 +144,12 @@ router.get("/current", async (req, res, next) => {
         },
         _sum: { amount: true },
       }),
+      // Only Interest-category income can boost the expense limit
       prisma.transaction.aggregate({
         where: {
           cycleId: activeCycle.id,
           transactionType: "INCOME",
-          category: { notIn: ["Salary", "salary"] },
+          category: "Interest",
         },
         _sum: { amount: true },
       }),
@@ -156,10 +168,11 @@ router.get("/current", async (req, res, next) => {
     const totalExpenses = Number(expenseAgg._sum.amount || 0);
     const regularExpenses = Number(regularExpenseAgg._sum.amount || 0);
     const salaryIncome = Number(salaryIncomeAgg._sum.amount || 0);
-    const extraIncome = Number(extraIncomeAgg._sum.amount || 0);
-    const totalIncome = salaryIncome + extraIncome;
+    const interestIncome = Number(interestIncomeAgg._sum.amount || 0);
+    const totalIncome = salaryIncome + interestIncome;
     let baseExpenseLimit = Number(activeCycle.expenseLimit);
-    let adjustedExpenseLimit = baseExpenseLimit + extraIncome;
+    const limitBoost = interestBoostsLimit ? interestIncome : 0;
+    let adjustedExpenseLimit = baseExpenseLimit + limitBoost;
 
     const remaining = adjustedExpenseLimit - regularExpenses;
 
@@ -220,7 +233,8 @@ router.get("/current", async (req, res, next) => {
         salaryAmount: salaryIncome || Number(activeCycle.salaryAmount),
         expenseLimit: baseExpenseLimit,
         adjustedExpenseLimit,
-        extraIncome,
+        interestIncome,
+        interestBoostsLimit,
         dynamicRent,
         rolloverAmount: Number(activeCycle.rolloverAmount),
         totalExpenses,
@@ -268,7 +282,11 @@ router.get("/:id", async (req, res, next) => {
       return res.status(404).json({ success: false, message: `Cycle ${id} not found` });
     }
 
-    const [expenseAgg, regularExpenseAgg, extraIncomeAgg, salaryIncomeAgg, rentAgg, expensesByCategory] = await Promise.all([
+    // Read the interest boost toggle
+    const boostSetting = await prisma.setting.findUnique({ where: { key: "interest_boosts_limit" } });
+    const interestBoostsLimit = boostSetting?.value !== "false";
+
+    const [expenseAgg, regularExpenseAgg, interestIncomeAgg, salaryIncomeAgg, rentAgg, expensesByCategory] = await Promise.all([
       prisma.transaction.aggregate({
         where: { cycleId: cycle.id, transactionType: "EXPENSE" },
         _sum: { amount: true },
@@ -281,11 +299,12 @@ router.get("/:id", async (req, res, next) => {
         },
         _sum: { amount: true },
       }),
+      // Only Interest-category income can boost the expense limit
       prisma.transaction.aggregate({
         where: {
           cycleId: cycle.id,
           transactionType: "INCOME",
-          category: { notIn: ["Salary", "salary"] },
+          category: "Interest",
         },
         _sum: { amount: true },
       }),
@@ -315,13 +334,14 @@ router.get("/:id", async (req, res, next) => {
     ]);
 
     let baseLimit = Number(cycle.expenseLimit);
-    const extraIncome = Number(extraIncomeAgg._sum.amount || 0);
+    const interestIncome = Number(interestIncomeAgg._sum.amount || 0);
     const salaryIncome = Number(salaryIncomeAgg._sum.amount || 0);
-    let adjustedExpenseLimit = baseLimit + extraIncome;
+    const limitBoost = interestBoostsLimit ? interestIncome : 0;
+    let adjustedExpenseLimit = baseLimit + limitBoost;
     const regularExpenses = Number(regularExpenseAgg._sum.amount || 0);
     const dynamicRent = Number(rentAgg._sum.amount || 0);
     const totalExpenses = Number(expenseAgg._sum.amount || 0);
-    const totalIncome = salaryIncome + extraIncome;
+    const totalIncome = salaryIncome + interestIncome;
 
     const remaining = adjustedExpenseLimit - regularExpenses;
 
@@ -340,7 +360,8 @@ router.get("/:id", async (req, res, next) => {
         salaryAmount: salaryIncome || Number(cycle.salaryAmount),
         expenseLimit: baseLimit,
         adjustedExpenseLimit,
-        extraIncome,
+        interestIncome,
+        interestBoostsLimit,
         dynamicRent,
         rolloverAmount: Number(cycle.rolloverAmount),
         totalExpenses,

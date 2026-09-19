@@ -168,7 +168,7 @@ export default function SalaryReceipt() {
 
             {/* Deductions */}
             <div className="flex justify-between items-center">
-              <span className="text-surface-500 text-xs">− Expense Limit</span>
+              <span className="text-surface-500 text-xs">− Budget Commitment</span>
               <span className="text-amber-400 font-medium">−{formatCurrency(expenseLimit)}</span>
             </div>
             <div className="flex justify-between items-center">

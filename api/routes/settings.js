@@ -31,14 +31,11 @@ router.put("/:key", validate(updateSettingSchema, "body"), async (req, res, next
     const { key } = req.params;
     const { value } = req.body;
 
-    const existing = await prisma.setting.findUnique({ where: { key } });
-    if (!existing) {
-      return res.status(404).json({ success: false, message: `Setting "${key}" not found` });
-    }
-
-    const updated = await prisma.setting.update({
+    // Upsert: create the setting if it doesn't exist, update if it does
+    const updated = await prisma.setting.upsert({
       where: { key },
-      data: { value },
+      update: { value },
+      create: { key, value },
     });
 
     res.json({ success: true, data: { key: updated.key, value: updated.value } });

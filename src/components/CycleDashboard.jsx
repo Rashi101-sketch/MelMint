@@ -80,8 +80,8 @@ export default function CycleDashboard() {
   }
 
   const baseLimit = Number(selectedCycle?.expenseLimit || 0);
-  const extraIncome = Number(selectedCycle?.extraIncome || 0);
-  const adjustedLimit = Number(selectedCycle?.adjustedExpenseLimit || baseLimit + extraIncome);
+  const interestIncome = Number(selectedCycle?.interestIncome || 0);
+  const adjustedLimit = Number(selectedCycle?.adjustedExpenseLimit || baseLimit);
   const regularExpenses = Number(selectedCycle?.regularExpenses ?? selectedCycle?.totalExpenses ?? 0);
   const diff = adjustedLimit - regularExpenses;
   const isSaved = diff >= 0;
@@ -123,9 +123,9 @@ export default function CycleDashboard() {
         <div className="p-3 rounded-xl bg-surface-900/40">
           <p className="text-[10px] text-surface-500 uppercase tracking-wider">Expense Limit</p>
           <p className="text-lg font-bold text-amber-400">{formatCurrency(adjustedLimit)}</p>
-          {extraIncome > 0 && (
+          {interestIncome > 0 && selectedCycle?.interestBoostsLimit && (
             <p className="text-[9px] text-blue-400 mt-0.5">
-              incl. +{formatCurrency(extraIncome)} extra
+              incl. +{formatCurrency(interestIncome)} interest
             </p>
           )}
         </div>

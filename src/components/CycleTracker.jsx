@@ -31,9 +31,10 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
     );
   }
 
-  const baseLimit = Number(settings?.expense_limit || cycle.expenseLimit || 150);
-  const extraIncome = Number(cycle.extraIncome || 0);
-  const adjustedLimit = cycle.adjustedExpenseLimit || (baseLimit + extraIncome);
+  const baseLimit = Number(settings?.expense_limit || cycle.expenseLimit || 300);
+  const interestIncome = Number(cycle.interestIncome || 0);
+  const interestBoostsLimit = cycle.interestBoostsLimit ?? (settings?.interest_boosts_limit !== "false");
+  const adjustedLimit = cycle.adjustedExpenseLimit || (baseLimit + (interestBoostsLimit ? interestIncome : 0));
   const spent = cycle.regularExpenses ?? cycle.totalExpenses ?? 0;
   const remaining = adjustedLimit - spent;
   const pct = adjustedLimit > 0 ? Math.min(100, (spent / adjustedLimit) * 100) : 0;
@@ -63,6 +64,17 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
       onSettingChange?.();
     } catch {
       toast.error("Failed to update limit");
+    }
+  };
+
+  const handleToggleInterestBoost = async () => {
+    const newValue = interestBoostsLimit ? "false" : "true";
+    try {
+      await updateSetting("interest_boosts_limit", newValue);
+      toast.success(newValue === "true" ? "Interest now boosts your expense limit" : "Interest no longer boosts your expense limit");
+      onSettingChange?.();
+    } catch {
+      toast.error("Failed to update setting");
     }
   };
 
@@ -99,7 +111,7 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
             </button>
           </p>
           <div>
-              {extraIncome > 0 ? (
+              {interestBoostsLimit && interestIncome > 0 ? (
                 <>
                   <p className="text-sm font-bold text-amber-400 line-through opacity-50">${baseLimit.toFixed(2)}</p>
                   <p className="text-lg font-bold text-emerald-400">${adjustedLimit.toFixed(2)}</p>
@@ -133,6 +145,39 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
         </div>
       </div>
 
+      {/* Interest Boost Toggle */}
+      <div className="mt-3 flex items-center justify-between p-2.5 rounded-lg bg-surface-900/30 border border-surface-700/30">
+        <div className="flex items-center gap-2">
+          <HiLightningBolt className="w-3.5 h-3.5 text-blue-400" />
+          <span className="text-xs text-surface-300">Add interest to monthly expense limit</span>
+        </div>
+        <button
+          onClick={handleToggleInterestBoost}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 cursor-pointer ${
+            interestBoostsLimit ? "bg-mint-500" : "bg-surface-600"
+          }`}
+          id="toggle-interest-boost"
+        >
+          <span
+            className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform duration-200 ${
+              interestBoostsLimit ? "translate-x-4.5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Interest Income Notice (only when toggle is on and interest > 0) */}
+      {interestBoostsLimit && interestIncome > 0 && (
+        <div className="mt-3 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <p className="text-xs text-blue-400 flex items-center gap-1.5">
+            <HiLightningBolt className="w-3.5 h-3.5" />
+            <span>
+              <span className="font-semibold">+${interestIncome.toFixed(2)}</span> interest income added to your expense limit this cycle
+            </span>
+          </p>
+        </div>
+      )}
+
       {/* Cycle Notes */}
       {cycle.cycleNotes && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -148,18 +193,6 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Extra Income Notice */}
-      {extraIncome > 0 && (
-        <div className="mt-3 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
-          <p className="text-xs text-blue-400 flex items-center gap-1.5">
-            <HiLightningBolt className="w-3.5 h-3.5" />
-            <span>
-              <span className="font-semibold">+${extraIncome.toFixed(2)}</span> extra income added to your expense limit this cycle
-            </span>
-          </p>
         </div>
       )}
 
@@ -200,7 +233,7 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-surface-800 border border-surface-700 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-surface-100">Edit Expense Limit</h3>
+              <h3 className="text-lg font-bold text-surface-100">Edit Monthly Expense Limit</h3>
               <button
                 onClick={() => setShowLimitModal(false)}
                 className="text-surface-400 hover:text-surface-200 transition-colors cursor-pointer"
@@ -211,7 +244,7 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
             
             <div className="mb-6">
               <label className="text-xs text-surface-400 uppercase tracking-wider block mb-2">
-                New Base Limit ($)
+                Monthly Base Limit ($)
               </label>
               <input
                 type="number"
@@ -222,7 +255,9 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
                 id="modal-limit-input"
               />
               <p className="text-[10px] text-surface-500 mt-2">
-                Note: Extra income will still be added on top of this base limit.
+                {interestBoostsLimit
+                  ? "Interest income will be added on top of this base limit."
+                  : "Interest income will not affect this limit (toggle is off)."}
               </p>
             </div>
 
@@ -232,14 +267,14 @@ export default function CycleTracker({ cycle, settings, loading, onSettingChange
                 className="w-full btn-primary py-2 text-sm"
                 id="btn-apply-cycle"
               >
-                Apply to This Cycle Only
+                Apply to This Month Only
               </button>
               <button
                 onClick={() => handleSaveLimit(true)}
                 className="w-full btn-secondary py-2 text-sm"
                 id="btn-apply-all"
               >
-                Apply to All Upcoming Cycles
+                Apply to All Upcoming Months
               </button>
             </div>
           </div>
