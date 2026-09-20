@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { HiViewGrid, HiTable } from "react-icons/hi";
+import { HiViewGrid, HiTable, HiClock } from "react-icons/hi";
 
 export default function Navigation() {
   const linkClass = ({ isActive }) =>
@@ -31,6 +31,10 @@ export default function Navigation() {
           <NavLink to="/transactions" className={linkClass}>
             <HiTable className="w-4 h-4" />
             Transactions
+          </NavLink>
+          <NavLink to="/history" className={linkClass}>
+            <HiClock className="w-4 h-4" />
+            History
           </NavLink>
         </nav>
       </div>

@@ -70,8 +70,6 @@ async function syncCycle(cycleId) {
     const interestBoostsLimit = boostSetting?.value !== "false";
     const limitBoost = interestBoostsLimit ? interestIncome : 0;
 
-    const isCycle1Exception = cycle.startDate >= new Date("2026-04-08") && cycle.startDate <= new Date("2026-04-21T23:59:59");
-
     // 4. Compute Pool 1 numbers (salary allocation)
     const expenseLimit = Number(cycle.expenseLimit);
     const afterLimit = salaryAmount - expenseLimit;
@@ -90,11 +88,7 @@ async function syncCycle(cycleId) {
     }
 
     // 5. Compute Pool 2 numbers (expense rollover)
-    let baseLimit = expenseLimit;
-    let adjustedLimit = baseLimit + limitBoost;
-    if (isCycle1Exception) {
-      adjustedLimit = salaryAmount + limitBoost;
-    }
+    const adjustedLimit = expenseLimit + limitBoost;
     const remaining = parseFloat((adjustedLimit - regularExpenses).toFixed(2));
     const expectedRollover = Math.max(0, remaining);
     const expectedOverspend = Math.max(0, parseFloat((-remaining).toFixed(2)));
@@ -157,7 +151,7 @@ async function syncCycle(cycleId) {
     }
 
     // B2. Percentage-based salary allocation (runs ONCE with total monthly salary)
-    if (!isCycle1Exception && availableSavings > 0) {
+    if (availableSavings > 0) {
       for (const goal of goals) {
         const allocAmount = parseFloat(((goal.percentage / 100) * availableSavings).toFixed(2));
         if (allocAmount > 0) {

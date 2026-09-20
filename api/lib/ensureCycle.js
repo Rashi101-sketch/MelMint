@@ -1,13 +1,6 @@
 const prisma = require("./prisma");
 
 /**
- * The cutoff date: transactions strictly before this date belong to the
- * pre-earning "Starting Balance" period. Transactions on or after this date
- * belong to the active earning period and monthly cycles.
- */
-const EARNING_START_DATE = new Date("2026-04-22T00:00:00.000Z");
-
-/**
  * Returns the first and last day of a given month in UTC.
  * @param {Date} date - Any date within the target month
  * @returns {{ start: Date, end: Date }}
@@ -32,12 +25,6 @@ function getMonthBounds(date) {
 async function ensureCurrentCycle(req, res, next) {
   try {
     const now = new Date();
-
-    // Skip cycle management for pre-earning period
-    if (now < EARNING_START_DATE) {
-      req.activeCycle = null;
-      return next();
-    }
 
     const activeCycle = await prisma.cycle.findFirst({
       where: { status: "ACTIVE" },
@@ -134,4 +121,4 @@ async function createMonthlyCycle(date) {
   return cycle;
 }
 
-module.exports = { ensureCurrentCycle, getMonthBounds, createMonthlyCycle, EARNING_START_DATE };
+module.exports = { ensureCurrentCycle, getMonthBounds, createMonthlyCycle };

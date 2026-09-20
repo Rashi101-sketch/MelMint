@@ -3,51 +3,31 @@ const router = express.Router();
 const prisma = require("../lib/prisma");
 const validate = require("../middleware/validate");
 const { summaryQuerySchema } = require("../validators/schemas");
-const { EARNING_START_DATE } = require("../lib/ensureCycle");
-
 // ─────────────────────────────────────────────────────────────
 // GET /api/summary — Financial summary
 //
-// The Starting Balance ($2,634.79) represents pre-existing money
-// from parents, computed as all Setup Fund transactions strictly before
-// 2026-04-22. It is frozen and never changes.
+// The Starting Balance represents the initial baseline balance stored
+// in the Settings table ("starting_balance", defaults to $0 for new users).
 //
-// totalIncome, totalExpenses, netBalance only count transactions
-// ON OR AFTER 2026-04-22 (the earning period).
+// totalIncome, totalExpenses, netBalance count transactions belonging
+// to monthly cycles (or custom date range/cycle filter).
 //
 // totalBalance = startingBalance + netBalance (earned)
 //
 // Query params:
 //   ?cycleId=1           → Summary for a specific cycle
 //   ?startDate=&endDate= → Custom date range
-//   (no params)          → Earned-period summary (post-22-April)
+//   (no params)          → All active/tracked cycles summary
 // ─────────────────────────────────────────────────────────────
 router.get("/", validate(summaryQuerySchema, "query"), async (req, res, next) => {
   try {
     const { cycleId, startDate, endDate } = req.query;
 
-    // ── Starting Balance: frozen pre-earning period ──────────
-    // Frozen Starting Balance: sum of all Setup Fund transactions strictly before 2026-04-22 ($2,634.79)
-    const preEarningCutoff = new Date("2026-04-22T00:00:00.000Z");
-    const [preIncome, preExpense] = await Promise.all([
-      prisma.transaction.aggregate({
-        where: {
-          wallet: { name: "Setup Fund" },
-          transactionType: "INCOME",
-          date: { lt: preEarningCutoff },
-        },
-        _sum: { amount: true },
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          wallet: { name: "Setup Fund" },
-          transactionType: "EXPENSE",
-          date: { lt: preEarningCutoff },
-        },
-        _sum: { amount: true },
-      }),
-    ]);
-    const startingBalance = Number(preIncome._sum.amount || 0) - Number(preExpense._sum.amount || 0);
+    // ── Starting Balance: stored in settings (defaults to 0) ─
+    const startingBalSetting = await prisma.setting.findUnique({
+      where: { key: "starting_balance" },
+    });
+    const startingBalance = parseFloat(startingBalSetting?.value || "0");
 
     // ── Earned-period summary ────────────────────────────────
     const where = {};
@@ -63,8 +43,8 @@ router.get("/", validate(summaryQuerySchema, "query"), async (req, res, next) =>
         where.date.lte = end;
       }
     } else {
-      // Default: only count post-22-April transactions
-      where.date = { gte: EARNING_START_DATE };
+      // Default: count all transactions belonging to cycles
+      where.cycleId = { not: null };
     }
 
     const [incomeAgg, expenseAgg, expensesByCategory, savingsGoals] = await Promise.all([

@@ -3,6 +3,7 @@ import { Toaster } from "react-hot-toast";
 import Navigation from "./components/Navigation";
 import DashboardPage from "./pages/DashboardPage";
 import TransactionsPage from "./pages/TransactionsPage";
+import HistoryPage from "./pages/HistoryPage";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/history" element={<HistoryPage />} />
           </Routes>
         </main>
 

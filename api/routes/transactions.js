@@ -88,19 +88,6 @@ router.post("/", validate(createTransactionSchema, "body"), async (req, res, nex
 
     const txDate = new Date(date);
 
-    // ── Historical: Cycle 1 rent-to-Setup-Fund exception ──────
-    // Kept as a record of the transition from parent-funded to self-funded.
-    // This date range (2026-04-08 to 2026-04-21) marks when rent was still
-    // paid from the Setup Fund. Won't apply to new transactions since wallet
-    // assignment is no longer meaningful.
-    const isCycle1Exception = txDate >= new Date("2026-04-08") && txDate <= new Date("2026-04-21T23:59:59");
-    if (isCycle1Exception && category.toLowerCase() === "rent") {
-      const setupFund = await prisma.wallet.findFirst({ where: { name: { contains: "Setup" } } });
-      if (setupFund) {
-        walletId = setupFund.id;
-      }
-    }
-
     // ── Find the correct monthly cycle for this transaction's date ──
     let targetCycleId = null;
     const matchingCycle = await findCycleForDate(txDate);

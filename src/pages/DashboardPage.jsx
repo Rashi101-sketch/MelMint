@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { HiX, HiSparkles } from "react-icons/hi";
+import { HiX, HiSparkles, HiArrowRight } from "react-icons/hi";
 import SummaryCards from "../components/SummaryCards";
 import CycleTracker from "../components/CycleTracker";
 import SavingsGoals from "../components/SavingsGoals";
 import TransactionTable from "../components/TransactionTable";
 import SalaryReceipt from "../components/SalaryReceipt";
 import CycleDashboard from "../components/CycleDashboard";
+import MonthEndSummaryModal from "../components/MonthEndSummaryModal";
 import {
   getCurrentCycle, getSavingsGoals, getCycles,
   getSummary, getSettings, getTransactions,
@@ -20,8 +21,10 @@ export default function DashboardPage() {
   const [recentTx, setRecentTx] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
 
-  // Rollover notification banner
+  // Month-end summary modal & rollover notification banner
   const [rolloverBanner, setRolloverBanner] = useState(null);
+  const [lastClosedCycle, setLastClosedCycle] = useState(null);
+  const [summaryModalCycle, setSummaryModalCycle] = useState(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -39,11 +42,24 @@ export default function DashboardPage() {
       setSummary(summaryRes.data || null);
       setSettings(settingsRes.data || {});
 
-      // Check for rollover notification from most recent closed cycle
+      // Check for most recent closed cycle
       const allCycles = cyclesRes.data || [];
-      const closedCycles = allCycles.filter(c => c.status === "CLOSED").sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+      const closedCycles = allCycles
+        .filter((c) => c.status === "CLOSED")
+        .sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+
       if (closedCycles.length > 0) {
         const lastClosed = closedCycles[0];
+        setLastClosedCycle(lastClosed);
+
+        // Check if user has seen the month-end summary modal for this cycle
+        const summarySeenKey = `month_summary_seen_${lastClosed.id}`;
+        const isSummarySeen = localStorage.getItem(summarySeenKey) === "true";
+        if (!isSummarySeen && lastClosed.monthlySummary) {
+          setSummaryModalCycle(lastClosed);
+        }
+
+        // Check for rollover banner notification
         const dismissKey = `rollover_dismissed_${lastClosed.id}`;
         const isDismissed = localStorage.getItem(dismissKey) === "true";
 
@@ -54,6 +70,7 @@ export default function DashboardPage() {
               amount: rollover.amount,
               goalName: rollover.goalName,
               cycleId: lastClosed.id,
+              cycle: lastClosed,
               dismissKey,
             });
           }
@@ -92,26 +109,43 @@ export default function DashboardPage() {
     setRolloverBanner(null);
   };
 
+  const handleCloseModal = () => {
+    if (summaryModalCycle) {
+      localStorage.setItem(`month_summary_seen_${summaryModalCycle.id}`, "true");
+    }
+    setSummaryModalCycle(null);
+  };
+
   return (
     <div className="space-y-6">
       {/* Rollover Notification Banner */}
       {rolloverBanner && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 animate-fade-in">
-          <p className="text-sm text-emerald-400 flex items-center gap-2">
-            <HiSparkles className="w-4 h-4" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 animate-fade-in shadow-sm">
+          <div className="flex items-center gap-2.5 text-sm text-emerald-400">
+            <HiSparkles className="w-5 h-5 shrink-0 text-emerald-400 animate-float" />
             <span>
-              <span className="font-semibold">${rolloverBanner.amount.toFixed(2)}</span> rolled into{" "}
-              <span className="font-semibold">{rolloverBanner.goalName}</span> this month
-              <span className="text-emerald-500/60"> — change this anytime in the Goals section below</span>
+              <span className="font-bold">${rolloverBanner.amount.toFixed(2)}</span> rolled into{" "}
+              <span className="font-bold">{rolloverBanner.goalName}</span> this month.
             </span>
-          </p>
-          <button
-            onClick={dismissRolloverBanner}
-            className="text-emerald-500/50 hover:text-emerald-400 transition-colors cursor-pointer p-1"
-            id="dismiss-rollover-banner"
-          >
-            <HiX className="w-4 h-4" />
-          </button>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <button
+              onClick={() => setSummaryModalCycle(rolloverBanner.cycle)}
+              className="text-xs font-bold text-emerald-300 hover:text-emerald-100 flex items-center gap-1 cursor-pointer underline underline-offset-2"
+            >
+              <span>View Full Summary</span>
+              <HiArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={dismissRolloverBanner}
+              className="text-emerald-500/60 hover:text-emerald-300 transition-colors cursor-pointer p-1"
+              id="dismiss-rollover-banner"
+              aria-label="Dismiss banner"
+            >
+              <HiX className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -152,6 +186,14 @@ export default function DashboardPage() {
 
       {/* Savings Goals */}
       <SavingsGoals goals={goals} loading={loading} onRefresh={fetchAll} settings={settings} />
+
+      {/* Month-End Summary Screen / Modal */}
+      {summaryModalCycle && (
+        <MonthEndSummaryModal
+          cycle={summaryModalCycle}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 }
